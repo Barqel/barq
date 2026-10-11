@@ -4,7 +4,7 @@ title: What is Barq?
 description: Discover Barq, a fast and lightweight framework for Bun for building HTTP applications, APIs, and WebSocket services, with a focus on performance, zero dependencies, and type safety.
 ---
 
-**Barq** is a high-performance web framework for [Bun](https://bun.sh/), built with TypeScript and designed for creating HTTP applications, APIs, and WebSocket services efficiently, without external packages in its core.
+**Barq** is a high-performance web framework for [Bun](https://bun.sh/) and **Node.js**, built with TypeScript and designed for creating HTTP applications, APIs, and WebSocket services efficiently, without external packages in its core.
 
 Barq starts with a simple principle: **every unnecessary operation along the request path deserves scrutiny.** Its architecture focuses on reducing avoidable work, matching routes efficiently, and deferring data processing until the application actually needs it.
 

@@ -1,10 +1,10 @@
 # Barq
 
-Barq is a small HTTP and WebSocket core for Bun, written in TypeScript. It provides a segment-trie router, typed route parameters, middleware hooks, request context helpers, cookie utilities, redirects, and graceful server shutdown.
+Barq is a high-performance HTTP and WebSocket core for Bun and Node.js, written in TypeScript. It provides a segment-trie router, typed route parameters, middleware hooks, request context helpers, cookie utilities, redirects, and graceful server shutdown.
 
 ## Requirements
 
-- Bun 1.1 or newer.
+- Bun 1.1 or newer, or Node.js 18+ (with zero-change automatic C++ Stream adapter).
 - A signing secret only when using signed cookies. Store it in a secret manager or environment variable; do not commit it.
 
 ## Quick start

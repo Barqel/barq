@@ -1,3 +1,5 @@
+import "./internal/node-compat";
+
 export type {
   AppOptions,
   RouteHandlerArg,

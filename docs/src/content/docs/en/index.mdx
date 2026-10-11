@@ -20,7 +20,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <div class="barq-eyebrow">
   <span class="barq-pulse"></span>
-  BUILT FOR BUN
+  BUILT FOR BUN & NODE.JS
   <span class="barq-separator">/</span>
   LIGHTWEIGHT CORE
   <span class="barq-separator">/</span>
@@ -29,9 +29,9 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## From request to response. With less overhead.
 
-Your framework should not spend time doing work your application doesn't need. **Barq** is designed to give you a fast, lightweight foundation for building HTTP services, APIs, and WebSocket applications with Bun.
+Your framework should not spend time doing work your application doesn't need. **Barq** is designed to give you a fast, lightweight foundation for building HTTP services, APIs, and WebSocket applications with **Bun and Node.js**.
 
-Barq uses Bun's native server and a Trie-based router to match routes efficiently, with a focus on reducing unnecessary work along the request path.
+Barq uses Bun's native server and Node.js's native HTTP modules, with a Trie-based router to match routes efficiently, with a focus on reducing unnecessary work along the request path.
 
 **The goal: high performance, clear code, and more freedom to build your application your way.**
 
@@ -74,7 +74,7 @@ Barq uses Bun's native server and a Trie-based router to match routes efficientl
     Barq uses a Trie-based router to find matching routes efficiently, rather than checking the entire route list for every request.
   </Card>
   <Card title="Speed starts at the core" icon="zap">
-    Barq builds on Bun's native server and focuses on reducing unnecessary work, helping requests reach your handlers with minimal overhead.
+    Barq builds on Bun's native server and Node.js's HTTP modules, focusing on reducing unnecessary work to help requests reach your handlers with minimal overhead.
   </Card>
   <Card title="Clear code with TypeScript" icon="code">
     Types help you build organized applications, work with route parameters and request context, and catch many mistakes during development.
@@ -128,7 +128,7 @@ You don't need a large setup to get started. Begin with one route, then add the 
 
 Speed isn't an afterthought in Barq's design. It's one of the core goals.
 
-Barq focuses on Bun's native server, Trie-based routing, and reducing unnecessary work along the request path. The aim is fast execution without adding needless complexity to your code.
+Barq focuses on Bun's native server, Node.js's HTTP modules, Trie-based routing, and reducing unnecessary work along the request path. The aim is fast execution without adding needless complexity to your code.
 
 Real-world performance also depends on what your application does, response sizes, workload, and runtime environment. That's why Barq should be evaluated with repeatable benchmarks that compare equivalent scenarios and report results clearly.
 
@@ -147,7 +147,7 @@ Real-world performance also depends on what your application does, response size
 
 Not every project needs a heavyweight framework or a stack of tools chosen for you. Sometimes, what you need most is a clear, fast foundation you can build on your own terms.
 
-Barq provides that foundation for HTTP applications, APIs, and WebSocket services with Bun, without external runtime dependencies.
+Barq provides that foundation for HTTP applications, APIs, and WebSocket services with **Bun and Node.js**, without external runtime dependencies.
 
 **Start today and see how Barq fits your project.**
 
