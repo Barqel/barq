@@ -21,7 +21,6 @@ if (isNode) {
           const url = `${protocol}://${host}${req.url || "/"}`;
           const method = req.method || "GET";
 
-          // تحويل الطلب بـ Zero-Copy باستخدام النواة الأصلية (C++)
           let reqBody: ReadableStream<Uint8Array> | undefined;
           if (method !== "GET" && method !== "HEAD") {
             reqBody = Readable.toWeb(
@@ -33,13 +32,13 @@ if (isNode) {
             method,
             headers: req.headers as HeadersInit,
             body: reqBody,
-            // @ts-expect-error - duplex مطلوب للتدفق في Node.js
+            // @ts-expect-error - duplex required for streaming in Node.js
             duplex: "half",
           });
 
           const remoteIp = req.socket.remoteAddress || "";
 
-          // استمرار العمل مع معالج Barq الداخلي مباشرة
+          // Continue with Barq internal handler directly
           // biome-ignore lint/complexity/useLiteralKeys: Access private members outside the class.
           const webRes = await this["handle"](webReq, {
             requestIP: () => (remoteIp ? { address: remoteIp } : null),
@@ -57,7 +56,7 @@ if (isNode) {
             return;
           }
 
-          // استخدام C++ Pipe للسرعة القصوى بدون حلقات JS تستهلك الذاكرة
+          // Use C++ Pipe for maximum speed without JS loops consuming memory
           const nodeStream = Readable.fromWeb(
             webRes.body as unknown as NodeReadableStream<Uint8Array>,
           );

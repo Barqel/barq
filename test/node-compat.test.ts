@@ -1,20 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import { unlink } from "node:fs/promises";
 
-// دالة مساعدة لعمل إعادة محاولة في حال لم يكتمل إقلاع Node.js
+// Helper function to retry fetch in case Node.js server isn't ready
 async function fetchWithRetry(
   url: string,
   options?: RequestInit,
   retries = 10,
 ) {
-  let lastError: unknown; // <-- تم تحديد النوع هنا لحل مشكلة Biome
+  let lastError: unknown; // Type specified here to fix Biome issue
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url, options);
       return res;
     } catch (e) {
       lastError = e;
-      await Bun.sleep(50); // انتظار 50 ملي ثانية ثم المحاولة مجدداً
+      await Bun.sleep(50); // Wait 50ms then retry
     }
   }
   throw lastError;
@@ -51,7 +51,7 @@ describe("Node.js Compatibility Layer", () => {
       });
 
       const server = app.listen(0);
-      // إضافة تأخير بسيط لضمان اكتمال حجز المنفذ في Node.js
+      // Add small delay to ensure port binding completes in Node.js
       setTimeout(() => {
         console.log("PORT:" + server.port);
       }, 50);
@@ -98,12 +98,12 @@ describe("Node.js Compatibility Layer", () => {
     expect(port).toBeGreaterThan(0);
 
     try {
-      // استخدام دالة إعادة المحاولة للطلب الأول فقط ريثما يجهز السيرفر
+      // Use retry function for first request only until server is ready
       const res1 = await fetchWithRetry(`http://localhost:${port}/`);
       expect(res1.status).toBe(200);
       expect(await res1.text()).toBe("Hello from Node");
 
-      // بمجرد نجاح الطلب الأول، أصبح السيرفر جاهزاً تماماً للطلبات المتبقية
+      // Once first request succeeds, server is fully ready for remaining requests
       const res2 = await fetch(`http://localhost:${port}/users/99`);
       expect(res2.status).toBe(200);
       expect(await res2.json()).toEqual({ id: "99" });

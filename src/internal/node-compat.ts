@@ -58,7 +58,7 @@ if (isNode) {
             method,
             headers: req.headers as HeadersInit,
             body: reqBody,
-            // @ts-expect-error - duplex مطلوب للتدفق في Node.js
+            // @ts-expect-error - duplex required for streaming in Node.js
             duplex: "half",
           });
 

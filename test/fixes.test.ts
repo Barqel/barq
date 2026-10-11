@@ -6,7 +6,7 @@ import { type StandardSchemaV1, validateJson } from "../src/validation";
 describe("Barq Architecture Fixes Verification", () => {
   it("verifies safe concurrency in FastLightContext when sync-declared function returns Promise", async () => {
     const app = new App();
-    // دالة غير معلنة بـ async لكنها تُرجع Promise
+    // Function not declared as async but returns Promise
     app.get("/sync-promise", (ctx) => {
       const query = ctx.queryParam("q");
       return Bun.sleep(15).then(() => ({ q: query }));
