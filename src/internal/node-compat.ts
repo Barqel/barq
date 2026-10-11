@@ -42,7 +42,9 @@ if (isNode) {
     const server = http.createServer(
       async (req: http.IncomingMessage, res: http.ServerResponse) => {
         try {
-          const protocol = "http";
+          const protocol = (req.socket as { encrypted?: boolean })?.encrypted
+            ? "https"
+            : "http";
           const host = req.headers.host || "localhost";
           const url = `${protocol}://${host}${req.url || "/"}`;
           const method = req.method || "GET";
@@ -58,7 +60,7 @@ if (isNode) {
             method,
             headers: req.headers as HeadersInit,
             body: reqBody,
-            // @ts-expect-error - duplex required for streaming in Node.js
+            // @ts-expect-error - duplex is required for streaming in Node.js
             duplex: "half",
           });
 
@@ -97,10 +99,6 @@ if (isNode) {
     );
 
     server.listen(listenPort, hostname);
-
-    console.log(
-      `⚡ Barq (Auto-Detected Node.js Mode) listening on http://${hostname}:${listenPort}`,
-    );
 
     return {
       port: listenPort,

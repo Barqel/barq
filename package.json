@@ -1,7 +1,7 @@
 {
   "name": "@barqel/barq",
-  "version": "1.0.0",
-  "description": "Zero dependencies. Maximum performance. HTTP & WebSocket for Bun.",
+  "version": "1.0.1",
+  "description": "Zero dependencies. Maximum performance. HTTP & WebSocket for Bun and Node.js.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "clean": "rm -rf dist",
-    "build": "rm -rf dist && bun build src/index.ts --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
+    "build": "rm -rf dist && bun build src/index.ts src/node-patch.ts --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
     "verify": "bun run check && bun run typecheck && bun run typecheck:tests && bun run test && bun run build",
     "prepublishOnly": "bun run verify"
   },
@@ -60,5 +60,10 @@
     "@types/bun": "^1.2.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "bun": {
+      "optional": true
+    }
   }
 }
