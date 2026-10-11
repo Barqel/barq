@@ -1,27 +1,28 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "files": {
-    "includes": [
-      "src/**/*.ts",
-      "test/**/*.ts",
-      "bench/**/*.ts",
-      "package.json",
-      "tsconfig.json"
-    ]
-  },
-  "formatter": {
-    "indentStyle": "space",
-    "indentWidth": 2
-  },
-  "linter": {
-    "rules": {
-      "preset": "recommended",
-      "style": {
-        "noNonNullAssertion": "off"
-      },
-      "suspicious": {
-        "noConfusingVoidType": "off"
-      }
-    }
-  }
+	"$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+	"files": {
+		"includes": [
+			"src/**/*.ts",
+			"test/**/*.ts",
+			"bench/**/*.ts",
+			"docs/**/*.ts",
+			"package.json",
+			"tsconfig.json"
+		]
+	},
+	"formatter": {
+		"indentStyle": "tab",
+		"indentWidth": 2
+	},
+	"linter": {
+		"rules": {
+			"preset": "recommended",
+			"style": {
+				"noNonNullAssertion": "off"
+			},
+			"suspicious": {
+				"noConfusingVoidType": "off"
+			}
+		}
+	}
 }

@@ -1,0 +1,146 @@
+---
+title: Quickstart
+description: Build and run your first Barq HTTP server on Bun or Node.js, then explore routes, request parameters, and JSON bodies.
+---
+
+import { TabItem, Tabs } from "@/components/tabs";
+
+# Quickstart
+
+Build a small HTTP service, run it with Node.js or Bun, and try a few routes. Barq supports HTTP on both runtimes; its native WebSocket routes and Bun-specific server options require Bun.
+
+## 1. Create the application
+
+Create `src/index.js` and add this JavaScript:
+
+```js
+import { App, json, text } from "@barqel/barq";
+
+const app = new App({
+  port: Number(process.env.PORT ?? 3000),
+});
+
+app.get("/", () => text("Barq is running"));
+app.get("/health", () => json({ ok: true }));
+
+app.get("/users/:id", (ctx) => {
+  return json({
+    id: ctx.params.id,
+    view: ctx.queryParam("view"),
+  });
+});
+
+app.post("/echo", async (ctx) => {
+  const payload = await ctx.json();
+  return json({ received: payload });
+});
+
+const server = app.listen();
+console.log(`Listening on http://localhost:${server.port}`);
+```
+
+The same file runs on both runtimes: the package root resolves to Barq's Node HTTP adapter under Node.js and to Bun's native HTTP server under Bun. The route and handler code stays the same.
+
+`process.env.PORT` reads the optional `PORT` environment variable. The example uses port `3000` when it is not set. The port must be a valid, available number.
+
+## 2. Start the server
+
+Make sure your project uses ECMAScript modules when running the `.js` file with Node.js:
+
+```sh
+npm pkg set type=module
+```
+
+Run the application with the runtime you selected:
+
+<Tabs syncKey="runtime">
+<TabItem label="Node.js">
+
+```sh
+node src/index.js
+```
+
+</TabItem>
+<TabItem label="Bun">
+
+```sh
+bun run src/index.js
+```
+
+</TabItem>
+</Tabs>
+
+The terminal prints the port the server is listening on. Keep this process running while you try the requests below.
+
+## 3. Try the routes
+
+Open another terminal and send a request to the home route:
+
+```sh
+curl http://localhost:3000/
+```
+
+Expected response:
+
+```text
+Barq is running
+```
+
+The health route returns JSON:
+
+```sh
+curl http://localhost:3000/health
+```
+
+```json
+{"ok":true}
+```
+
+## 4. Read path and query parameters
+
+The `/users/:id` route reads a path parameter and an optional query parameter:
+
+```sh
+curl 'http://localhost:3000/users/42?view=compact'
+```
+
+Expected response:
+
+```json
+{"id":"42","view":"compact"}
+```
+
+In this request, `ctx.params.id` is the string `"42"`, and `ctx.queryParam("view")` is `"compact"`. URL parameters are strings; validate and convert them before using them as numbers or making authorization decisions. For example:
+
+```js
+const id = Number(ctx.params.id);
+
+if (!Number.isSafeInteger(id) || id <= 0) {
+  return json({ error: "Invalid user ID" }, 400);
+}
+```
+
+## 5. Read a JSON request body
+
+The `/echo` route reads the request body as JSON and returns it in a response:
+
+```sh
+curl -X POST http://localhost:3000/echo \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Hello, Barq!"}'
+```
+
+Expected response:
+
+```json
+{"received":{"message":"Hello, Barq!"}}
+```
+
+Parsing JSON only confirms that the body contains valid JSON. Validate its structure and values before relying on them in application logic. See [Data Validation](/en/docs/basics/validation) for schema-based and inline validation.
+
+## What's next?
+
+- [Routing](/en/docs/basics/routing) — register routes, use route groups, and handle HTTP methods.
+- [Request Context](/en/docs/basics/context) — work with request data, headers, cookies, and responses.
+- [Middleware and Groups](/en/docs/basics/middleware) — add shared request behavior and configure CORS.
+- [API Reference](/en/docs/api-reference) — browse Barq's public APIs and runtime-specific features.

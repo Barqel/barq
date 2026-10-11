@@ -1,0 +1,14 @@
+{
+  "title": "Core concepts",
+  "pages": [
+    "routing",
+    "context",
+    "middleware",
+    "plugins",
+    "responses",
+    "validation",
+    "form-data-and-files",
+    "errors",
+    "cookies"
+  ]
+}

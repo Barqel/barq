@@ -1,0 +1,141 @@
+---
+title: برق
+description: إطار HTTP خفيف وسريع لـBun وNode.js، مع دعم WebSocket أصلي على Bun.
+---
+
+<div className="barq-eyebrow">
+  <span className="barq-pulse"></span>
+  HTTP لـ BUN & NODE.JS
+  <span className="barq-separator">/</span>
+  نواة خفيفة
+  <span className="barq-separator">/</span>
+  الأداء أولًا
+</div>
+
+## من الطلب إلى الاستجابة. بأقل جهد ممكن.
+
+لا ينبغي أن يستهلك الإطار وقتك في أعمال لا يحتاج إليها تطبيقك. يمنحك **Barq** أساسًا سريعًا وخفيفًا لبناء خدمات HTTP وواجهات API باستخدام **Bun وNode.js**. يتطلب دعم WebSocket الأصلي استخدام Bun حاليًا.
+
+يستخدم Barq خادم Bun الأصلي أو محوّل HTTP الخاص بـNode.js، إلى جانب موجّه يعتمد على بنية Trie لمطابقة المسارات بكفاءة وتقليل العمل الإضافي في مسار الطلب.
+
+**النتيجة التي نسعى إليها: أداء عالٍ، وشيفرة واضحة، وحرية أكبر في بناء تطبيقك.**
+
+<div className="barq-flow" role="img" aria-label="مراحل معالجة الطلب في Barq">
+  <div className="barq-flow-top">
+    <span>رحلة الطلب داخل Barq</span>
+    <span className="barq-live"><i></i> خفيف من البداية</span>
+  </div>
+  <div className="barq-flow-steps">
+    <div className="barq-flow-node">
+      <span className="barq-flow-icon">01</span>
+      <strong>استقبال الطلب</strong>
+      <small>Bun</small>
+    </div>
+    <span className="barq-flow-line"></span>
+    <div className="barq-flow-node">
+      <span className="barq-flow-icon">02</span>
+      <strong>مطابقة المسار</strong>
+      <small>Trie Router</small>
+    </div>
+    <span className="barq-flow-line"></span>
+    <div className="barq-flow-node barq-flow-node-active">
+      <span className="barq-flow-icon">03</span>
+      <strong>تنفيذ شيفرتك</strong>
+      <small>Handler</small>
+    </div>
+    <span className="barq-flow-line"></span>
+    <div className="barq-flow-node">
+      <span className="barq-flow-icon">04</span>
+      <strong>إرسال الاستجابة</strong>
+      <small>Response</small>
+    </div>
+  </div>
+</div>
+
+## سرعة في التصميم. وبساطة في الاستخدام.
+
+<Cards>
+  <Card title="توجيه سريع للمسارات">
+    يستخدم Barq بنية Trie للعثور على المسار المناسب بكفاءة، بدل الاعتماد على فحص قائمة المسارات كاملة مع كل طلب.
+  </Card>
+  <Card title="سرعة تبدأ من النواة">
+    يستخدم Barq خادم Bun الأصلي أو محوّل HTTP الخاص بـNode.js، ويركز على تقليل العمل غير الضروري حتى تصل الطلبات إلى معالجاتك بأقل حمل ممكن.
+  </Card>
+  <Card title="شيفرة واضحة مع TypeScript">
+    تساعدك الأنواع على كتابة تطبيق منظم، والتعامل مع معاملات المسارات وسياق الطلب، واكتشاف كثير من الأخطاء أثناء التطوير.
+  </Card>
+  <Card title="أنت تختار أدواتك">
+    أضف قاعدة البيانات والمصادقة والخدمات التي يحتاج إليها مشروعك. يمنحك Barq الأساس، ويترك لك حرية اختيار بقية الأدوات.
+  </Card>
+</Cards>
+
+## بداية بسيطة. ونتائج ملموسة.
+
+أنشئ تطبيقًا، وسجّل مسارًا، وأعد استجابة JSON. هذا كل ما تحتاج إليه لفهم الفكرة الأساسية:
+
+```js
+import { App, json } from "@barqel/barq";
+
+const app = new App();
+
+app.get("/users/:id", (ctx) => {
+  return json({ id: ctx.params.id });
+});
+
+const server = app.listen(3000);
+
+console.log(`Server running at http://localhost:${server.port}`);
+```
+
+شغّل التطبيق، ثم أرسل طلبًا إلى:
+
+`http://localhost:3000/users/42`
+
+ستكون الاستجابة المتوقعة:
+
+```json
+{
+  "id": "42"
+}
+```
+
+ما الذي يحدث هنا؟
+
+- `App` ينشئ تطبيق Barq.
+- `app.get()` يربط طلبات `GET` بالمسار المحدد.
+- `ctx.params.id` يقرأ قيمة `id` من عنوان الطلب.
+- `json()` يعيد البيانات بصيغة JSON.
+- `app.listen(3000)` يشغّل الخادم على المنفذ `3000`.
+
+يعمل المثال على بيئتي التشغيل: الاستيراد من `@barqel/barq` يوجّه تلقائيًا إلى محوّل Node.js أو إلى خادم Bun الأصلي. أما كود المسار فيبقى كما هو.
+
+لا تحتاج إلى إعداد منظومة كبيرة لتبدأ. ابدأ بمسار واحد، ثم أضف بقية وظائف تطبيقك خطوة بخطوة.
+
+## كل جزء من الثانية يستحق الاهتمام.
+
+السرعة ليست إضافة تأتي بعد اكتمال الإطار؛ بل هي أحد الاعتبارات الأساسية في تصميم Barq.
+
+يركز الإطار على خادم Bun الأصلي، ومحوّل HTTP الخاص بـNode.js، والتوجيه باستخدام Trie، وتقليل العمل الإضافي في مسار الطلب. والهدف هو إتاحة تنفيذ سريع دون فرض تعقيد غير ضروري على شيفرتك.
+
+لكن الأداء الحقيقي يعتمد أيضًا على ما يفعله التطبيق، وحجم الاستجابات، وطبيعة الحمل، وبيئة التشغيل. لذلك ينبغي تقييم Barq من خلال اختبارات قابلة للتكرار تقارن الحالات نفسها وتعرض النتائج بوضوح.
+
+<div className="barq-bottom-cta">
+  <div>
+    <span>فكرتك تستحق أن تبدأ.</span>
+    <strong>برق — سرعة بلا تعقيد.</strong>
+  </div>
+  <a href="/ar/docs/getting-started/quickstart">
+    ابدأ البناء الآن
+    <span aria-hidden="true">←</span>
+  </a>
+</div>
+
+## أساس قوي. وحرية كاملة في البناء.
+
+ليس كل مشروع بحاجة إلى إطار ضخم أو مجموعة أدوات مفروضة عليه. أحيانًا يكون أفضل ما تحتاج إليه هو أساس واضح وسريع يمكنك البناء فوقه بالطريقة التي تناسبك.
+
+يوفر Barq هذا الأساس لتطبيقات HTTP وواجهات API باستخدام **Bun وNode.js**، دون اعتماديات تشغيل خارجية. ويتوفر دعم WebSocket الأصلي على Bun.
+
+**ابدأ اليوم، واكتشف بنفسك كيف يناسب Barq مشروعك.**
+
+انتقل إلى [دليل البداية السريعة](/ar/docs/getting-started/quickstart) لبناء أول تطبيق لك.

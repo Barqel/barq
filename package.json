@@ -1,69 +1,69 @@
 {
-  "name": "@barqel/barq",
-  "version": "1.0.1",
-  "description": "Zero dependencies. Maximum performance. HTTP & WebSocket for Bun and Node.js.",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./node": {
-      "types": "./dist/node-patch.d.ts",
-      "import": "./dist/node-patch.js"
-    }
-  },
-  "scripts": {
-    "format": "biome format --write .",
-    "lint": "biome lint .",
-    "check": "biome check .",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
-    "clean": "rm -rf dist",
-    "build": "rm -rf dist && bun build src/index.ts src/node-patch.ts --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
-    "verify": "bun run check && bun run typecheck && bun run typecheck:tests && bun run test && bun run build",
-    "prepublishOnly": "bun run verify"
-  },
-  "files": [
-    "dist"
-  ],
-  "keywords": [
-    "bun",
-    "http",
-    "router",
-    "server",
-    "websocket",
-    "framework",
-    "typescript",
-    "zero-dependency",
-    "fast",
-    "api"
-  ],
-  "author": "Barq Contributors",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Barqel/barq.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Barqel/barq/issues"
-  },
-  "homepage": "https://github.com/Barqel/barq#readme",
-  "peerDependencies": {
-    "bun": ">=1.1.0"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
-    "@types/bun": "^1.2.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
-  },
-  "peerDependenciesMeta": {
-    "bun": {
-      "optional": true
-    }
-  }
+	"name": "@barqel/barq",
+	"version": "1.0.1",
+	"description": "Zero dependencies. Maximum performance. HTTP for Bun and Node.js; native WebSockets for Bun.",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./node": {
+			"types": "./dist/node-patch.d.ts",
+			"import": "./dist/node-patch.js"
+		}
+	},
+	"scripts": {
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check .",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
+		"clean": "rm -rf dist",
+		"build": "rm -rf dist && bun build src/index.ts src/node-patch.ts --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
+		"verify": "bun run check && bun run typecheck && bun run typecheck:tests && bun run test && bun run build",
+		"prepublishOnly": "bun run verify"
+	},
+	"files": [
+		"dist"
+	],
+	"keywords": [
+		"bun",
+		"http",
+		"router",
+		"server",
+		"websocket",
+		"framework",
+		"typescript",
+		"zero-dependency",
+		"fast",
+		"api"
+	],
+	"author": "Barq Contributors",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Barqel/barq.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Barqel/barq/issues"
+	},
+	"homepage": "https://github.com/Barqel/barq#readme",
+	"peerDependencies": {
+		"bun": ">=1.1.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.15",
+		"@types/bun": "^1.2.0",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.0.0"
+	},
+	"peerDependenciesMeta": {
+		"bun": {
+			"optional": true
+		}
+	}
 }

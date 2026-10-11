@@ -1,15 +1,15 @@
 # Barq
 
-Barq is a high-performance HTTP and WebSocket core for Bun and Node.js, written in TypeScript. It provides a segment-trie router, typed route parameters, middleware hooks, request context helpers, cookie utilities, redirects, and graceful server shutdown.
+Barq is a high-performance HTTP core for Bun and Node.js, written in TypeScript. It provides a segment-trie router, typed route parameters, middleware hooks, request context helpers, cookie utilities, redirects, and graceful server shutdown. Native WebSocket support is available on Bun.
 
 ## Requirements
 
-- Bun 1.1 or newer, or Node.js 18+ (with zero-change automatic C++ Stream adapter).
+- Bun 1.1 or newer, or Node.js 18+ for HTTP applications. On Node.js, import `@barqel/barq/node` to enable the HTTP adapter; native WebSockets and Bun-specific server features require Bun.
 - A signing secret only when using signed cookies. Store it in a secret manager or environment variable; do not commit it.
 
 ## Quick start
 
-```ts
+```js
 import { App, json } from "@barqel/barq";
 
 const app = new App();
@@ -21,9 +21,13 @@ app.get("/users/:id", (ctx) => {
 app.listen(3000);
 ```
 
+This example enables the Node.js HTTP adapter. With Bun, import from `@barqel/barq` instead. Barq's native WebSocket routes require Bun.
+
 See [examples/README.md](./examples/README.md) for runnable examples covering routing, middleware, validation, cookies, WebSockets, errors, and server lifecycle.
 
 See [compares/README.md](./compares/README.md) for the separate Bun project used to benchmark Barq against Elysia with Bun's client or external `oha`.
+
+The bilingual Fumadocs site lives in [`doc/`](./doc/README.md). Run it with `cd doc && bun run dev`; English and Arabic docs are available at `/en/docs` and `/ar/docs`.
 
 Unsigned cookies work without a signing secret. Cookies are `HttpOnly` by default; pass `httpOnly: false` only when browser JavaScript needs access. Set `secure: true` for HTTPS deployments. To use signed cookies, configure a high-entropy secret and set cookies with `ctx.cookies.setSigned(name, value)`. `getSigned` returns `null` when verification fails or no secret is configured.
 
