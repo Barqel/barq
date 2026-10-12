@@ -26,7 +26,7 @@
 		"build": "rm -rf dist && bun build src/index.ts src/node-patch.ts --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
 		"verify": "bun run check && bun run typecheck && bun run typecheck:tests && bun run test && bun run build",
 		"prepublishOnly": "bun run verify",
-		"publish": "pnpm ublish --access public"
+		"publish": "npm publish --access public"
 	},
 	"files": [
 		"dist"
