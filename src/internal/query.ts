@@ -20,32 +20,33 @@ export function findQueryParam(
 		startPos !== undefined && startPos >= 0 ? startPos : url.indexOf("?");
 	if (queryStart === -1) return null;
 
+	const hashPos = url.indexOf("#", queryStart);
+	const len = hashPos === -1 ? url.length : hashPos;
 	let s = queryStart + 1;
-	const len = url.length;
 	const nameLen = name.length;
 
 	while (s < len) {
 		if (url.startsWith(name, s)) {
 			const eqPos = s + nameLen;
+			if (eqPos >= len) return "";
 			const nextChar = url.charCodeAt(eqPos);
 			if (nextChar === 61) {
-				// '='
 				const valStart = eqPos + 1;
 				let amp = url.indexOf("&", valStart);
-				if (amp === -1) amp = len;
+				if (amp === -1 || amp > len) amp = len;
 				const val = url.slice(valStart, amp);
 				if (val.indexOf("+") === -1 && val.indexOf("%") === -1) {
 					return val;
 				}
 				return decodeQueryComponent(val);
 			}
-			if (nextChar === 38 || eqPos === len) {
+			if (nextChar === 38) {
 				return "";
 			}
 		}
 
 		const amp = url.indexOf("&", s);
-		if (amp === -1) break;
+		if (amp === -1 || amp >= len) break;
 		s = amp + 1;
 	}
 	return null;
@@ -55,12 +56,14 @@ export function findQueryParamAll(url: string, name: string): string[] {
 	const res: string[] = [];
 	const queryStart = url.indexOf("?");
 	if (queryStart === -1) return res;
-	const len = url.length;
+	const hashPos = url.indexOf("#", queryStart);
+	const len = hashPos === -1 ? url.length : hashPos;
 	let s = queryStart + 1;
 	const nLen = name.length;
+
 	while (s < len) {
 		let amp = url.indexOf("&", s);
-		if (amp === -1) amp = len;
+		if (amp === -1 || amp > len) amp = len;
 		let eq = url.indexOf("=", s);
 		if (eq === -1 || eq > amp) eq = amp;
 		if (eq - s === nLen && url.startsWith(name, s)) {
@@ -83,12 +86,14 @@ export function findQueryParamAll(url: string, name: string): string[] {
 export function parseAllQueryParams(url: string): Record<string, string> {
 	const qIdx = url.indexOf("?");
 	if (qIdx === -1) return Object.create(null);
-	const len = url.length;
+	const hashPos = url.indexOf("#", qIdx);
+	const len = hashPos === -1 ? url.length : hashPos;
 	const res: Record<string, string> = Object.create(null);
 	let s = qIdx + 1;
+
 	while (s < len) {
 		let amp = url.indexOf("&", s);
-		if (amp === -1) amp = len;
+		if (amp === -1 || amp > len) amp = len;
 		let eq = url.indexOf("=", s);
 		if (eq === -1 || eq > amp) eq = amp;
 		const k = decodeQueryComponent(url.slice(s, eq));
@@ -104,13 +109,15 @@ export function parseFastQuery(
 	startPos: number,
 ): Record<string, string> {
 	const out: Record<string, string> = Object.create(null);
+	const hashPos = url.indexOf("#", startPos);
+	const len = hashPos === -1 ? url.length : hashPos;
 	let s = startPos;
-	const len = url.length;
+
 	while (s < len) {
 		let eq = url.indexOf("=", s);
-		if (eq === -1) eq = len;
+		if (eq === -1 || eq > len) eq = len;
 		let amp = url.indexOf("&", eq < len ? eq + 1 : s);
-		if (amp === -1) amp = len;
+		if (amp === -1 || amp > len) amp = len;
 		const k = url.slice(s, eq);
 		const v = eq < amp ? url.slice(eq + 1, amp) : "";
 		out[k] =

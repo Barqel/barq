@@ -9,13 +9,287 @@
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
+        "zod": "^4.6.6",
       },
       "peerDependencies": {
         "bun": ">=1.1.0",
       },
+      "optionalPeers": [
+        "bun",
+      ],
+    },
+    "packages/auth": {
+      "name": "@barqel/barq-auth",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/cache": {
+      "name": "@barqel/barq-cache",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/cli": {
+      "name": "@barqel/barq-cli",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/compress": {
+      "name": "@barqel/barq-compress",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/cron": {
+      "name": "@barqel/barq-cron",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/events": {
+      "name": "@barqel/barq-events",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/helmet": {
+      "name": "@barqel/barq-helmet",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/idempotency": {
+      "name": "@barqel/barq-idempotency",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/logger": {
+      "name": "@barqel/barq-logger",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/openapi": {
+      "name": "@barqel/barq-openapi",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/prometheus": {
+      "name": "@barqel/barq-prometheus",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/proxy": {
+      "name": "@barqel/barq-proxy",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/pubsub": {
+      "name": "@barqel/barq-pubsub",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/rate-limit": {
+      "name": "@barqel/barq-rate-limit",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/sse": {
+      "name": "@barqel/barq-sse",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/static": {
+      "name": "@barqel/barq-static",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/upload": {
+      "name": "@barqel/barq-upload",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/versioning": {
+      "name": "@barqel/barq-versioning",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+      },
+    },
+    "packages/zod": {
+      "name": "@barqel/barq-zod",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+        "zod": "^3.24.0",
+      },
+      "peerDependencies": {
+        "@barqel/barq": ">=1.0.0",
+        "zod": ">=3.0.0",
+      },
     },
   },
   "packages": {
+    "@barqel/barq": ["@barqel/barq@1.0.1", "", { "peerDependencies": { "bun": ">=1.1.0" }, "optionalPeers": ["bun"] }, "sha512-YTYHLqe8eFdt1CM3vm9Ltfogw/hFmapYd8BafPnEV9Bk/jpQfonkGzStb3Yg40yrJR9Iz7DWHSQuCxFC9wAJAg=="],
+
+    "@barqel/barq-auth": ["@barqel/barq-auth@workspace:packages/auth"],
+
+    "@barqel/barq-cache": ["@barqel/barq-cache@workspace:packages/cache"],
+
+    "@barqel/barq-cli": ["@barqel/barq-cli@workspace:packages/cli"],
+
+    "@barqel/barq-compress": ["@barqel/barq-compress@workspace:packages/compress"],
+
+    "@barqel/barq-cron": ["@barqel/barq-cron@workspace:packages/cron"],
+
+    "@barqel/barq-events": ["@barqel/barq-events@workspace:packages/events"],
+
+    "@barqel/barq-helmet": ["@barqel/barq-helmet@workspace:packages/helmet"],
+
+    "@barqel/barq-idempotency": ["@barqel/barq-idempotency@workspace:packages/idempotency"],
+
+    "@barqel/barq-logger": ["@barqel/barq-logger@workspace:packages/logger"],
+
+    "@barqel/barq-openapi": ["@barqel/barq-openapi@workspace:packages/openapi"],
+
+    "@barqel/barq-prometheus": ["@barqel/barq-prometheus@workspace:packages/prometheus"],
+
+    "@barqel/barq-proxy": ["@barqel/barq-proxy@workspace:packages/proxy"],
+
+    "@barqel/barq-pubsub": ["@barqel/barq-pubsub@workspace:packages/pubsub"],
+
+    "@barqel/barq-rate-limit": ["@barqel/barq-rate-limit@workspace:packages/rate-limit"],
+
+    "@barqel/barq-sse": ["@barqel/barq-sse@workspace:packages/sse"],
+
+    "@barqel/barq-static": ["@barqel/barq-static@workspace:packages/static"],
+
+    "@barqel/barq-upload": ["@barqel/barq-upload@workspace:packages/upload"],
+
+    "@barqel/barq-versioning": ["@barqel/barq-versioning@workspace:packages/versioning"],
+
+    "@barqel/barq-zod": ["@barqel/barq-zod@workspace:packages/zod"],
+
     "@biomejs/biome": ["@biomejs/biome@2.5.15", "", { "optionalDependencies": { "@biomejs/cli-darwin-arm64": "2.5.15", "@biomejs/cli-darwin-x64": "2.5.15", "@biomejs/cli-linux-arm64": "2.5.15", "@biomejs/cli-linux-arm64-musl": "2.5.15", "@biomejs/cli-linux-x64": "2.5.15", "@biomejs/cli-linux-x64-musl": "2.5.15", "@biomejs/cli-win32-arm64": "2.5.15", "@biomejs/cli-win32-x64": "2.5.15" }, "bin": { "biome": "bin/biome" } }, "sha512-WZTW4slm/pdkh92K6t/3aEN++44JD1PQ7squ7RCMLI1flHGl43DVOIGXvCjHiZgBMO1V4uYxoFNtqrIA4qGuIQ=="],
 
     "@biomejs/cli-darwin-arm64": ["@biomejs/cli-darwin-arm64@2.5.15", "", { "os": "darwin", "cpu": "arm64" }, "sha512-BZVzFhJ/mUvTLMYbc9x6el0o2Uv5zP7bACYyhFb6fSc1giroXm7PL0a5KqMJ9F+/BnkYRjagD/ROSDVOZ6eapg=="],
@@ -34,41 +308,19 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.5.15", "", { "os": "win32", "cpu": "x64" }, "sha512-yAzh4UqEImV6Hcy0zjUqNfJAsUhoD64FBQCdTG8Md/Z2wQeVP/ZmJ3XRYAs1g8J9fjTFyl2fCtc5FB5til47+g=="],
 
-    "@oven/bun-darwin-aarch64": ["@oven/bun-darwin-aarch64@1.4.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-MXdZkP1featqxZ+/VTXWG1BVjM4OGBehVY2Q88EeUj/7L0UMeCGItmyPYTN+wxvlGJ6F66JEtzsw+GvQWewnag=="],
-
-    "@oven/bun-darwin-x64": ["@oven/bun-darwin-x64@1.4.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-gZTxZuLjkUhAWjTETu3tw0WhsEdNkJ64daj60ybhPf835a2yollV3yTkK9JozvzKPx4TRFzLSl8C+U525pxVbw=="],
-
-    "@oven/bun-freebsd-aarch64": ["@oven/bun-freebsd-aarch64@1.4.2", "", { "os": "freebsd", "cpu": "arm64" }, "sha512-SMNItMw1Z8QeeQVKnw8jA7xQNkeXdP+OPgin4Wi/QTx/B8RHHLnuZfqmFy7NtVeT2NF0kKYppW4WWd2CCYZjhQ=="],
-
-    "@oven/bun-freebsd-x64": ["@oven/bun-freebsd-x64@1.4.2", "", { "os": "freebsd", "cpu": "x64" }, "sha512-THbPKXhO54N0DpFRKZNDZpQ7dpbX0bWASuARckAUS9wRtFIHsiY+uULXJvxJGo2YD1YewvXQ4G8Fj7XT5oBCiw=="],
-
-    "@oven/bun-linux-aarch64": ["@oven/bun-linux-aarch64@1.4.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-3BBP9ovJ2RGHFH6Ae1CAtxNtG1+YY6GD6rmYbsUosoAk9+OEl6zeDQ/k4fBkc6dYOJCtWnx8hUxzNzQATSmvYQ=="],
-
-    "@oven/bun-linux-aarch64-android": ["@oven/bun-linux-aarch64-android@1.4.2", "", { "os": "android", "cpu": "arm64" }, "sha512-3mZKO2rhsNgbAUtAHC1UKUlF2zTxFraDZT/Elv8wzyH0fJL9h+Iv3TgB9lO63w89PRn3eFe+NRA1bhVgikKNPQ=="],
-
-    "@oven/bun-linux-aarch64-musl": ["@oven/bun-linux-aarch64-musl@1.4.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-+Sm6y+lSiSFBOtXmnekp5Q6n1tUKlyv71FCPWBc61Cgb14T5eBs8SN/nh4MUCOKzONkI3O+as3MGUgikS4aCBQ=="],
-
-    "@oven/bun-linux-x64": ["@oven/bun-linux-x64@1.4.2", "", { "os": "linux", "cpu": "x64" }, "sha512-9/E/UXOTpSo3YsV5g+FhtTd/qTpiWoKuxS12cqtuYA1ssu9fRAoPQnipFgGyck3tWO63iUdxBiygq+kELFawng=="],
-
-    "@oven/bun-linux-x64-android": ["@oven/bun-linux-x64-android@1.4.2", "", { "os": "android", "cpu": "x64" }, "sha512-6HC5tzcC79113n2IHCTJMWv+HsQImv4ZFEK2XpYLxY6HbT8tM4cUM2Zv1bHZBQsS3jv/zYBamDJ1UX7If0d5tw=="],
-
-    "@oven/bun-linux-x64-musl": ["@oven/bun-linux-x64-musl@1.4.2", "", { "os": "linux", "cpu": "x64" }, "sha512-vVTKUg1bnPhRP/Hp73jIVoFh2vPFNYEqYX0ERKfZBOQEEHitNAeukZzzuUDZS0SoDCIpuWUGSpd/CDMbjdR+Uw=="],
-
-    "@oven/bun-windows-aarch64": ["@oven/bun-windows-aarch64@1.4.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-8EJ1ST7339WJE3poPW5nBgVW/lWf9HBz4W27ZUNhburKmcBLOByPyE6DP9fHD8FQGm5c+ilUN2hX1mrW0jxq9Q=="],
-
-    "@oven/bun-windows-x64": ["@oven/bun-windows-x64@1.4.2", "", { "os": "win32", "cpu": "x64" }, "sha512-+bN6OuVld/9diT/RLSXSW7JE6CvNE3gL9XsAEjULi1nUsXd6DNO6GuA9jNdNb3r8PdJFnYHr5aypNV1Oj3Rd9g=="],
-
     "@types/bun": ["@types/bun@1.4.2", "", { "dependencies": { "bun-types": "1.4.2" } }, "sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ=="],
 
     "@types/node": ["@types/node@20.19.43", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA=="],
-
-    "bun": ["bun@1.4.2", "", { "optionalDependencies": { "@oven/bun-darwin-aarch64": "1.4.2", "@oven/bun-darwin-x64": "1.4.2", "@oven/bun-freebsd-aarch64": "1.4.2", "@oven/bun-freebsd-x64": "1.4.2", "@oven/bun-linux-aarch64": "1.4.2", "@oven/bun-linux-aarch64-android": "1.4.2", "@oven/bun-linux-aarch64-musl": "1.4.2", "@oven/bun-linux-x64": "1.4.2", "@oven/bun-linux-x64-android": "1.4.2", "@oven/bun-linux-x64-musl": "1.4.2", "@oven/bun-windows-aarch64": "1.4.2", "@oven/bun-windows-x64": "1.4.2" }, "os": [ "!aix", "!sunos", "!openbsd", ], "cpu": [ "x64", "arm64", ], "bin": { "bun": "bin/bun.exe", "bunx": "bin/bunx.exe" } }, "sha512-TrSXo6HJfIEaczpb3kjX82I2pL47vK1QUNmHRCUdz9IzaOwa9lzOXSWwu2l18YHE3sNfGRapVLd4nNm+22vVVA=="],
 
     "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+
+    "zod": ["zod@4.6.6", "", {}, "sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA=="],
+
+    "@barqel/barq-zod/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "bun-types/@types/node": ["@types/node@26.6.4", "", { "dependencies": { "undici-types": "~8.9.0" } }, "sha512-ldVPDCzj7fsaGZrLB0NuHuTvJcsNasysBAqMolr/cgxrLd1xbqxIr3XJiPnHHJUCxj5sNF1vnRj9aWnrVh5Jcg=="],
 

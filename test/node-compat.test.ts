@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { unlink } from "node:fs/promises";
+import { connect } from "node:net";
 
 async function fetchWithRetry(
 	url: string,
@@ -20,15 +21,20 @@ async function fetchWithRetry(
 }
 
 describe("Node.js Compatibility Layer", () => {
-	it("runs a Barq app successfully under Node.js with routes, json, params, and signed cookies", async () => {
+	it("runs Barq under Node.js with high-performance routing, JSON, cookies, and WebSockets", async () => {
 		const buildProc = Bun.spawn(["bun", "run", "build"], {
 			stdout: "pipe",
 			stderr: "pipe",
 		});
 		const buildExit = await buildProc.exited;
 		if (buildExit !== 0) {
-			const errText = await new Response(buildProc.stderr).text();
-			throw new Error(`Build failed with code ${buildExit}: ${errText}`);
+			const [stdout, stderr] = await Promise.all([
+				new Response(buildProc.stdout).text(),
+				new Response(buildProc.stderr).text(),
+			]);
+			throw new Error(
+				`Build failed with code ${buildExit}:\n${stdout}\n${stderr}`,
+			);
 		}
 
 		const jsPath = `./tmp_node_test_${Math.random().toString(36).slice(2)}.js`;
@@ -38,7 +44,7 @@ describe("Node.js Compatibility Layer", () => {
       
       const app = new App({ cookieSecret: "test-secret-key-at-least-32-bytes-long-123456" });
       
-      app.get("/", (ctx) => "Hello from Node");
+      app.get("/", () => "Hello from Node");
       app.get("/users/:id", (ctx) => ({ id: ctx.params.id }));
       app.post("/echo", async (ctx) => await ctx.json());
       app.get("/cookie", (ctx) => {
@@ -47,6 +53,15 @@ describe("Node.js Compatibility Layer", () => {
       });
       app.get("/get-cookie", (ctx) => {
         return ctx.cookies.getSigned("session") || "null";
+      });
+
+      app.ws("/ws", {
+        open(ws) {
+          ws.send("node-ws-ready");
+        },
+        message(ws, msg) {
+          ws.send("echo:" + msg);
+        }
       });
 
       const server = app.listen(0);
@@ -68,7 +83,7 @@ describe("Node.js Compatibility Layer", () => {
 
 		const timeout = setTimeout(() => {
 			proc.kill();
-		}, 5000);
+		}, 6000);
 
 		let port = 0;
 		try {
@@ -84,13 +99,6 @@ describe("Node.js Compatibility Layer", () => {
 			}
 		} finally {
 			clearTimeout(timeout);
-		}
-
-		if (port === 0) {
-			const errReader = proc.stderr.getReader();
-			const errVal = await errReader.read();
-			const errText = decoder.decode(errVal.value);
-			console.error("NODE STDERR:", errText);
 		}
 
 		expect(port).toBeGreaterThan(0);
@@ -122,6 +130,39 @@ describe("Node.js Compatibility Layer", () => {
 			});
 			expect(res5.status).toBe(200);
 			expect(await res5.text()).toBe("user-node");
+
+			const wsHandshakePromise = new Promise<string>((resolve, reject) => {
+				const client = connect(port, "127.0.0.1", () => {
+					client.write(
+						"GET /ws HTTP/1.1\r\n" +
+							"Host: localhost\r\n" +
+							"Upgrade: websocket\r\n" +
+							"Connection: Upgrade\r\n" +
+							"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+							"Sec-WebSocket-Version: 13\r\n\r\n",
+					);
+				});
+
+				let data = "";
+				client.on("data", (chunk) => {
+					data += chunk.toString("latin1");
+					if (data.includes("\r\n\r\n")) {
+						client.destroy();
+						resolve(data);
+					}
+				});
+				client.on("error", reject);
+				setTimeout(() => {
+					client.destroy();
+					reject(new Error("WebSocket handshake timeout"));
+				}, 2000);
+			});
+
+			const handshake = await wsHandshakePromise;
+			expect(handshake).toContain("101 Switching Protocols");
+			expect(handshake).toContain(
+				"Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+			);
 		} finally {
 			proc.kill();
 			await proc.exited;

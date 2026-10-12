@@ -39,7 +39,6 @@ export class Context<
 > {
 	readonly req: Request;
 	readonly params: TParams;
-	/** @internal Set only when this request queues a cookie mutation. */
 	_hasPendingCookies = false;
 
 	private readonly server: Server<unknown> | null;
@@ -100,7 +99,6 @@ export class Context<
 		return lazy.cookies as CookieJar;
 	}
 
-	/** @internal Returns the jar without creating one. */
 	_cookieJarIfCreated(): CookieJar | null {
 		return this._lazy?.cookies ?? null;
 	}
@@ -186,12 +184,10 @@ export class Context<
 			return directIp;
 		}
 
-		for (const name of ["cf-connecting-ip", "x-real-ip"]) {
-			const candidate = this.req.headers.get(name)?.trim();
-			if (candidate && isValidIpAddress(candidate)) {
-				this._getLazy().ip = candidate;
-				return candidate;
-			}
+		const realIp = this.req.headers.get("x-real-ip")?.trim();
+		if (realIp && isValidIpAddress(realIp)) {
+			this._getLazy().ip = realIp;
+			return realIp;
 		}
 
 		this._getLazy().ip = directIp;

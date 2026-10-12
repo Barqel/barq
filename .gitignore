@@ -53,6 +53,7 @@ code.txt
 /docs/.vite/
 /docs/.cache/
 /docs/dist/
+/docs/out/
 /docs/node_modules/
 /docs/package-lock.json
 /docs/pnpm-lock.yaml

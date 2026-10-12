@@ -14,13 +14,13 @@ export async function stopServer(
 	let stopPromise: Promise<void> | null = null;
 
 	try {
-		stopPromise = server.stop().then(() => {});
+		stopPromise = Promise.resolve(server.stop()).then(() => {});
 		await Promise.race([
 			stopPromise,
 			new Promise<void>((resolve) => {
 				timer = setTimeout(() => {
 					forced = true;
-					stopPromise = server.stop(true).then(() => {});
+					stopPromise = Promise.resolve(server.stop(true)).then(() => {});
 					resolve();
 				}, hardTimeoutMs);
 				timer?.unref?.();

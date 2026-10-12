@@ -7,7 +7,12 @@
 			"bench/**/*.ts",
 			"docs/**/*.ts",
 			"package.json",
-			"tsconfig.json"
+			"tsconfig.json",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/out",
+			"!**/.next",
+			"!**/*.d.ts"
 		]
 	},
 	"formatter": {

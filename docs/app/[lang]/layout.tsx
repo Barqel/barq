@@ -22,7 +22,8 @@ export default async function Layout(props: LayoutProps<'/[lang]'>) {
   return (
     <html lang={lang} dir={getDirection(lang)} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
-        <RootProvider>
+        {/* the search index ships as a static asset, see `app/search.json/route.ts` */}
+        <RootProvider search={{ options: { type: 'static', api: '/search.json' } }}>
           <LocaleProvider {...i18nProvider(translations, lang)}>{props.children}</LocaleProvider>
         </RootProvider>
       </body>

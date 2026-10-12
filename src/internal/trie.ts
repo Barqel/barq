@@ -27,28 +27,10 @@ const METHOD_BITS: Record<HttpMethod, number> = {
 	OPTIONS: 1 << 6,
 };
 
-const _ALL_METHODS_BITMASK = (1 << 7) - 1;
-// Linear key checks beat substring creation only at very small fanout.
 const STATIC_CHILD_SCAN_THRESHOLD = 4;
 
 function methodBit(method: HttpMethod): number {
 	return METHOD_BITS[method] ?? 0;
-}
-
-function _hasMethod(bits: number, method: HttpMethod): boolean {
-	return (bits & methodBit(method)) !== 0;
-}
-
-function _methodsToString(bits: number): string {
-	const methods: string[] = [];
-	if (bits & METHOD_BITS.GET) methods.push("GET");
-	if (bits & METHOD_BITS.POST) methods.push("POST");
-	if (bits & METHOD_BITS.PUT) methods.push("PUT");
-	if (bits & METHOD_BITS.DELETE) methods.push("DELETE");
-	if (bits & METHOD_BITS.PATCH) methods.push("PATCH");
-	if (bits & METHOD_BITS.HEAD) methods.push("HEAD");
-	if (bits & METHOD_BITS.OPTIONS) methods.push("OPTIONS");
-	return methods.join(", ");
 }
 
 interface TrieNode {
@@ -137,10 +119,10 @@ const MAX_OPTIONAL_PARAMS = 8;
 
 export function parsePattern(pattern: string): PatternSegment[] {
 	if (pattern.length === 0 || pattern.charCodeAt(0) !== 47) {
-		throw new Error(`Invalid route pattern "${pattern}": must start with '/'`);
+		throw new Error(`Invalid route pattern "${pattern}": must start with /`);
 	}
 	if (pattern.indexOf("#") !== -1) {
-		throw new Error(`Invalid route pattern "${pattern}": must not contain '#'`);
+		throw new Error(`Invalid route pattern "${pattern}": must not contain #`);
 	}
 	let p = pattern;
 	if (p.length > 1 && p.charCodeAt(p.length - 1) === 47) {
@@ -155,9 +137,7 @@ export function parsePattern(pattern: string): PatternSegment[] {
 		const end = slash === -1 ? p.length : slash;
 		const seg = p.slice(i, end);
 		if (seg.length === 0) {
-			throw new Error(
-				`Invalid route pattern "${pattern}": empty segment ('//')`,
-			);
+			throw new Error(`Invalid route pattern "${pattern}": empty segment (//)`);
 		}
 		const c0 = seg.charCodeAt(0);
 		if (
@@ -195,7 +175,7 @@ export function parsePattern(pattern: string): PatternSegment[] {
 		} else if (c0 === 42) {
 			if (end !== p.length) {
 				throw new Error(
-					`Invalid route pattern "${pattern}": wildcard '*' must be the final segment`,
+					`Invalid route pattern "${pattern}": wildcard * must be the final segment`,
 				);
 			}
 			const name = seg.length > 1 ? seg.slice(1) : null;
@@ -288,7 +268,6 @@ function matchNode(
 		const segEnd = slash === -1 ? len : slash;
 
 		if (segEnd === i) {
-			// A single trailing slash is accepted; empty interior segments are not.
 			if (slash === len - 1) {
 				return matchNode(
 					node,
@@ -323,7 +302,8 @@ function matchNode(
 			}
 			if (child !== undefined) {
 				const hasParamChildren =
-					node.paramChildren !== null && node.paramChildren.size > 0;
+					node.paramChild !== null ||
+					(node.paramChildren !== null && node.paramChildren.size > 0);
 				if (!hasParamChildren && node.wildcardChild === null) {
 					node = child;
 					i = nextI;
@@ -348,13 +328,52 @@ function matchNode(
 			}
 		}
 
-		const paramChildren =
-			node.paramChildren ??
-			(node.paramChild !== null && node.paramName !== null
-				? new Map([[node.paramName, node.paramChild]])
-				: null);
-		if (paramChildren !== null && paramChildren.size > 0) {
-			for (const [paramName, child] of paramChildren) {
+		if (node.paramChild !== null && node.paramName !== null) {
+			const child = node.paramChild;
+			const paramName = node.paramName;
+
+			if (nextI >= len && child.handlers !== null) {
+				let leafH = child.handlers[method];
+				if (leafH === undefined && method === "HEAD")
+					leafH = child.handlers.GET;
+				if (leafH !== undefined) {
+					const paramVal =
+						pathname.indexOf("%", i) !== -1
+							? decodeParam(pathname.slice(i, segEnd))
+							: pathname.slice(i, segEnd);
+					const p: RouteParams = {
+						[paramName]: paramVal,
+						[MATCH_HANDLER]: leafH,
+					};
+					if (depth === 0) return p;
+					for (let k = 0; k < depth; k++) {
+						p[paramNames[k]!] = paramValues[k]!;
+					}
+					return p;
+				}
+			}
+
+			paramNames[depth] = paramName;
+			paramValues[depth] = decodeParam(pathname.slice(i, segEnd));
+
+			const res = matchNode(
+				child,
+				pathname,
+				nextI,
+				method,
+				paramNames,
+				paramValues,
+				depth + 1,
+			);
+			if (res !== null) {
+				if (MATCH_NOT_ALLOWED in res) {
+					notAllowedCandidate ??= res as NotAllowed;
+				} else {
+					return res;
+				}
+			}
+		} else if (node.paramChildren !== null && node.paramChildren.size > 0) {
+			for (const [paramName, child] of node.paramChildren) {
 				if (nextI >= len && child.handlers !== null) {
 					let leafH = child.handlers[method];
 					if (leafH === undefined && method === "HEAD")
@@ -574,21 +593,6 @@ export class SegmentTrie {
 					: pattern;
 			if (cleanPattern.length > this.maxStaticLength) {
 				this.maxStaticLength = cleanPattern.length;
-			}
-		}
-
-		for (const seg of segments) {
-			if (seg.kind === "static") {
-			} else if (seg.kind === "param") {
-				if (isPureStatic) {
-					throw new Error(`Internal error: param segment in pure static route`);
-				}
-			} else {
-				if (isPureStatic) {
-					throw new Error(
-						`Internal error: wildcard segment in pure static route`,
-					);
-				}
 			}
 		}
 

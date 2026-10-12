@@ -1,3 +1,5 @@
+import { HttpError } from "../errors";
+
 export interface ParsedTarget {
 	pathname: string;
 	query: string | undefined;
@@ -117,11 +119,12 @@ export function scanPathname(url: string): string {
 		if (hash !== -1 && hash < end) end = hash;
 	}
 	const raw = url.slice(slash, end);
-	if (raw.indexOf(".") === -1 && raw.indexOf("%") === -1) return raw;
 
-	if (hasEncodedSlash(raw)) {
-		return raw;
+	if (raw.indexOf("%00") !== -1 || raw.indexOf("\0") !== -1) {
+		throw new HttpError(400, { error: "Bad Request" });
 	}
+
+	if (raw.indexOf(".") === -1 && raw.indexOf("%") === -1) return raw;
 
 	return hasDotSegment(raw) ? normalizeDotSegments(raw) : raw;
 }
@@ -156,12 +159,11 @@ export function parseRequestTarget(url: string): ParsedTarget {
 		}
 
 		const raw = url.slice(slash, end);
-
-		if (hasEncodedSlash(raw)) {
-			pathname = raw;
-		} else {
-			pathname = hasDotSegment(raw) ? normalizeDotSegments(raw) : raw;
+		if (raw.indexOf("%00") !== -1 || raw.indexOf("\0") !== -1) {
+			throw new HttpError(400, { error: "Bad Request" });
 		}
+
+		pathname = hasDotSegment(raw) ? normalizeDotSegments(raw) : raw;
 	}
 
 	return { pathname, query };

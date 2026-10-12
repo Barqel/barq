@@ -50,25 +50,12 @@ const METHODS: readonly HttpMethod[] = [
 ];
 const MAX_ROUTE_SEGMENTS = 256;
 const EMPTY_PARAMS: Params = Object.freeze(Object.create(null) as Params);
-// Prebuilt `Headers` instances rather than plain objects: the `Response`
-// constructor has to parse/validate header names and values on every call, and
-// handing it an already-built `Headers` skips that work. Measured ~285ns per
-// response versus a frozen plain object on Bun 1.4.
-//
-// Safe to share: `new Response(body, { headers })` copies the entries into a
-// fresh `Headers` on the response, so mutating `response.headers` later (cookie
-// application, `stripBody`) never touches these. Never mutate them here.
+
 const FAST_JSON_HEADERS: Headers = new Headers({
 	"content-type": "application/json; charset=utf-8",
 });
 const FAST_TEXT_HEADERS: Headers = new Headers({
 	"content-type": "text/plain; charset=utf-8",
-});
-const _FAST_JSON_INIT: ResponseInit = Object.freeze({
-	headers: FAST_JSON_HEADERS,
-});
-const _FAST_TEXT_INIT: ResponseInit = Object.freeze({
-	headers: FAST_TEXT_HEADERS,
 });
 
 class ReadonlySetView<T> {
@@ -275,13 +262,16 @@ class FastLightContext {
 	}
 
 	get url(): string {
-		// biome-ignore lint/suspicious/noAssignInExpressions: Preserve the lazy-cache fast path.
-		return this._url ?? (this._url = this.req.url);
+		if (this._url === undefined) {
+			this._url = this.req.url;
+		}
+		return this._url;
 	}
 	get pathname(): string {
-		if (this._pathname !== undefined) return this._pathname;
-		// biome-ignore lint/suspicious/noAssignInExpressions: Preserve the lazy-cache fast path.
-		return (this._pathname = scanPathname(this.url));
+		if (this._pathname === undefined) {
+			this._pathname = scanPathname(this.url);
+		}
+		return this._pathname;
 	}
 	queryParam(name: string): string | null {
 		let u = this._url;
@@ -312,6 +302,25 @@ class FastLightContext {
 	}
 	get bodyStream(): ReadableStream<Uint8Array> | null {
 		return this.req.body;
+	}
+}
+
+const lightContextPool: FastLightContext[] = [];
+
+function acquireLightContext(
+	req: Request,
+	params: Record<string, string>,
+): FastLightContext {
+	const popped = lightContextPool.pop();
+	if (popped !== undefined) {
+		return popped.init(req, params);
+	}
+	return new FastLightContext(req, params);
+}
+
+function releaseLightContext(ctx: FastLightContext): void {
+	if (lightContextPool.length < 128) {
+		lightContextPool.push(ctx);
 	}
 }
 
@@ -503,11 +512,11 @@ function canonicalizeRoutePattern(pattern: string): string {
 
 function validateRoutePattern(pattern: string): void {
 	if (pattern.length === 0 || pattern.charCodeAt(0) !== 47) {
-		throw new Error(`Invalid route pattern "${pattern}": must start with '/'`);
+		throw new Error(`Invalid route pattern "${pattern}": must start with /`);
 	}
 	if (pattern === "/") return;
 	if (pattern.indexOf("#") !== -1) {
-		throw new Error(`Invalid route pattern "${pattern}": must not contain '#'`);
+		throw new Error(`Invalid route pattern "${pattern}": must not contain #`);
 	}
 	const segments = pattern.split("/");
 	if (segments.length - 1 > MAX_ROUTE_SEGMENTS) {
@@ -518,14 +527,12 @@ function validateRoutePattern(pattern: string): void {
 	for (let i = 1; i < segments.length; i++) {
 		const seg = segments[i]!;
 		if (seg.length === 0) {
-			throw new Error(
-				`Invalid route pattern "${pattern}": empty segment ('//')`,
-			);
+			throw new Error(`Invalid route pattern "${pattern}": empty segment (//)`);
 		}
 		const decoded = decodeSegment(seg);
 		if (decoded === "." || decoded === "..") {
 			throw new Error(
-				`Invalid route pattern "${pattern}": dot segments '.', '..' not allowed in route patterns`,
+				`Invalid route pattern "${pattern}": dot segments ., .. not allowed in route patterns`,
 			);
 		}
 	}
@@ -975,12 +982,10 @@ export class App<TState extends object = Record<string, unknown>> {
 		return this;
 	}
 
-	/** @internal */
 	_register(method: HttpMethod, pattern: string, args: unknown[]): this {
 		return this._registerMethods([method], pattern, args);
 	}
 
-	/** @internal */
 	_registerMethods(
 		methods: readonly HttpMethod[],
 		pattern: string,
@@ -1408,10 +1413,7 @@ export class App<TState extends object = Record<string, unknown>> {
 						}
 					} else if (nr.isParamsOnly && raw) {
 						const analysis = analyzeHandler(raw);
-						if (
-							analysis.paramSerializer &&
-							raw.constructor.name !== "AsyncFunction"
-						) {
+						if (analysis.paramSerializer) {
 							const serializer = analysis.paramSerializer;
 							const responseInit = { headers: FAST_JSON_HEADERS };
 							methodMap[nr.method] = (req: Request) => {
@@ -1421,6 +1423,16 @@ export class App<TState extends object = Record<string, unknown>> {
 											params?: Record<string, string>;
 										}
 									).params ?? EMPTY_PARAMS;
+								const syncRes = raw({ params } as never);
+								if (isThenable(syncRes)) {
+									return Promise.resolve(syncRes).then((val) =>
+										val instanceof Response
+											? val
+											: typeof val === "object" && val !== null
+												? Response.json(val)
+												: new Response(String(val)),
+									);
+								}
 								return new Response(serializer(params), responseInit);
 							};
 						} else {
@@ -1458,50 +1470,40 @@ export class App<TState extends object = Record<string, unknown>> {
 									new Response(null, { headers: FAST_JSON_HEADERS });
 						}
 					} else if (nr.isLightweight && raw) {
-						const isAsync = raw.constructor.name === "AsyncFunction";
-						const reusedLightCtx = new FastLightContext(
-							null as unknown as Request,
-							EMPTY_PARAMS,
-						);
-						let lightCtxInUse = false;
 						methodMap[nr.method] = (req: Request) => {
 							const params = isDyn
 								? ((req as unknown as { params?: Record<string, string> })
 										.params ?? EMPTY_PARAMS)
 								: EMPTY_PARAMS;
-							const useFresh = isAsync || lightCtxInUse;
-							const ctx = useFresh
-								? new FastLightContext(req, params)
-								: reusedLightCtx.init(req, params);
-							if (!useFresh) lightCtxInUse = true;
+							const ctx = acquireLightContext(req, params);
 							let res: unknown;
 							try {
 								res = raw(ctx as never);
 							} catch (err) {
-								if (!useFresh) lightCtxInUse = false;
+								releaseLightContext(ctx);
 								return errorToResponse(err, this.development);
 							}
 							if (typeof res === "object" && res !== null) {
 								if (res instanceof Response) {
-									if (!useFresh) lightCtxInUse = false;
+									releaseLightContext(ctx);
 									return res;
 								}
 								if (!isThenable(res)) {
-									if (!useFresh) lightCtxInUse = false;
+									releaseLightContext(ctx);
 									return Response.json(res);
 								}
 							} else if (typeof res === "string") {
-								if (!useFresh) lightCtxInUse = false;
+								releaseLightContext(ctx);
 								return new Response(res, { headers: FAST_TEXT_HEADERS });
 							} else if (!isThenable(res)) {
-								if (!useFresh) lightCtxInUse = false;
+								releaseLightContext(ctx);
 								return new Response(JSON.stringify(res), {
 									headers: FAST_JSON_HEADERS,
 								});
 							}
 							return Promise.resolve(res)
 								.then((r) => {
-									if (!useFresh) lightCtxInUse = false;
+									releaseLightContext(ctx);
 									if (r instanceof Response) return r;
 									if (typeof r === "object" && r !== null)
 										return new Response(JSON.stringify(r), {
@@ -1512,7 +1514,7 @@ export class App<TState extends object = Record<string, unknown>> {
 									return finalizeValue(r as HandlerResult);
 								})
 								.catch((err) => {
-									if (!useFresh) lightCtxInUse = false;
+									releaseLightContext(ctx);
 									return errorToResponse(err, this.development);
 								});
 						};
@@ -1595,7 +1597,7 @@ export class App<TState extends object = Record<string, unknown>> {
 										: stripBody(res as Response);
 								}
 							}
-							return new Response(`{"error":"Method Not Allowed"}`, {
+							return new Response('{"error":"Method Not Allowed"}', {
 								status: 405,
 								headers: {
 									"content-type": "application/json; charset=utf-8",
@@ -1872,6 +1874,9 @@ export class App<TState extends object = Record<string, unknown>> {
 		}
 
 		const processes: ReturnType<typeof Bun.spawn>[] = [];
+		let crashCount = 0;
+		let lastReset = Date.now();
+
 		const spawnWorker = () => {
 			const proc = Bun.spawn([process.execPath, "run", entry], {
 				env: {
@@ -1883,10 +1888,30 @@ export class App<TState extends object = Record<string, unknown>> {
 			});
 			proc.exited.then((_code) => {
 				if (this.stopPromise === null && this.clusterProcesses !== null) {
+					const now = Date.now();
+					if (now - lastReset > 5000) {
+						crashCount = 0;
+						lastReset = now;
+					}
+					crashCount++;
+
 					const idx = processes.indexOf(proc);
 					if (idx !== -1) {
 						processes.splice(idx, 1);
 					}
+
+					if (crashCount > 15) {
+						console.error(
+							"[Barq Cluster] Workers restarting too fast. Throttling respawn.",
+						);
+						setTimeout(() => {
+							if (this.stopPromise === null && this.clusterProcesses !== null) {
+								processes.push(spawnWorker());
+							}
+						}, 2000);
+						return;
+					}
+
 					processes.push(spawnWorker());
 				}
 			});

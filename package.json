@@ -59,11 +59,15 @@
 		"@biomejs/biome": "^2.5.15",
 		"@types/bun": "^1.2.0",
 		"@types/node": "^20.0.0",
-		"typescript": "^5.0.0"
+		"typescript": "^5.0.0",
+		"zod": "^4.6.6"
 	},
 	"peerDependenciesMeta": {
 		"bun": {
 			"optional": true
 		}
-	}
+	},
+	"workspaces": [
+		"packages/*"
+	]
 }
