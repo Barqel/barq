@@ -1,5 +1,10 @@
 import { getNextCronRun, parseCronExpression } from "./parser";
-import type { CronJobInterface, CronJobOptions, CronTask, ParsedCronFields } from "./types";
+import type {
+	CronJobInterface,
+	CronJobOptions,
+	CronTask,
+	ParsedCronFields,
+} from "./types";
 
 export class CronJob implements CronJobInterface {
 	readonly name: string;
@@ -91,7 +96,10 @@ export class CronJob implements CronJobInterface {
 				await Promise.race([
 					Promise.resolve(this.task(this)),
 					new Promise((_, reject) =>
-						setTimeout(() => reject(new Error(`Job "${this.name}" timed out`)), this.options.timeoutMs),
+						setTimeout(
+							() => reject(new Error(`Job "${this.name}" timed out`)),
+							this.options.timeoutMs,
+						),
 					),
 				]);
 			} else {

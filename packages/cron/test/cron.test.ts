@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { CronJob, CronScheduler, getNextCronRun, parseCronExpression } from "../src/index";
+import {
+	CronJob,
+	CronScheduler,
+	getNextCronRun,
+	parseCronExpression,
+} from "../src/index";
 
 describe("@barqel/barq-cron", () => {
 	it("parses 5-field cron patterns and presets", () => {
@@ -64,8 +69,14 @@ describe("@barqel/barq-cron", () => {
 
 	it("manages multiple jobs via CronScheduler", () => {
 		const scheduler = new CronScheduler();
-		const j1 = scheduler.add("@daily", () => {}, { name: "daily_sync", autoStart: false });
-		const j2 = scheduler.add("@hourly", () => {}, { name: "hourly_cache", autoStart: false });
+		const j1 = scheduler.add("@daily", () => {}, {
+			name: "daily_sync",
+			autoStart: false,
+		});
+		const j2 = scheduler.add("@hourly", () => {}, {
+			name: "hourly_cache",
+			autoStart: false,
+		});
 
 		expect(scheduler.get("daily_sync")).toBe(j1);
 		expect(scheduler.list().length).toBe(2);

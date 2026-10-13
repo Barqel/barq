@@ -1,6 +1,6 @@
-@import 'tailwindcss';
-@import 'fumadocs-ui/css/neutral.css';
-@import 'fumadocs-ui/css/preset.css';
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
 
 /* ---------------------------------------------------------------------------
    Fonts
@@ -17,90 +17,94 @@
    --------------------------------------------------------------------------- */
 
 @font-face {
-  font-family: 'Cairo';
-  font-style: normal;
-  font-weight: 200 1000;
-  font-display: swap;
-  src: url('/fonts/Cairo-Arabic.woff2') format('woff2');
-  unicode-range:
-    U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F,
-    U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7,
-    U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24,
-    U+1EE27-1EE29, U+1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B,
-    U+1EE4D-1EE4F, U+1EE51, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62,
-    U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE8B-1EE9B,
-    U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+	font-family: "Cairo";
+	font-style: normal;
+	font-weight: 200 1000;
+	font-display: swap;
+	src: url("/fonts/Cairo-Arabic.woff2") format("woff2");
+	unicode-range:
+		U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F,
+		U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7,
+		U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24,
+		U+1EE27-1EE29, U+1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B,
+		U+1EE4D-1EE4F, U+1EE51, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62,
+		U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE8B-1EE9B,
+		U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
 }
 
 @font-face {
-  font-family: 'Cairo';
-  font-style: normal;
-  font-weight: 200 1000;
-  font-display: swap;
-  src: url('/fonts/Cairo-Latin.woff2') format('woff2');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
-    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+	font-family: "Cairo";
+	font-style: normal;
+	font-weight: 200 1000;
+	font-display: swap;
+	src: url("/fonts/Cairo-Latin.woff2") format("woff2");
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+		U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/Inter-Latin.woff2') format('woff2');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
-    U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+	font-family: "Inter";
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url("/fonts/Inter-Latin.woff2") format("woff2");
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+		U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 :root {
-  --barq-font-sans: 'Inter', 'Cairo', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --barq-font-arabic: 'Cairo', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  /* Cairo sits last, and only on purpose: none of the faces above it carry
+	--barq-font-sans:
+		"Inter", "Cairo", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--barq-font-arabic:
+		"Cairo", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+	/* Cairo sits last, and only on purpose: none of the faces above it carry
      Arabic, so those glyphs used to fall through to whatever the OS mapped to
      the generic `monospace` keyword -- a different typeface from the rest of the
      Arabic page. Listing Cairo after the Latin faces keeps Latin and digits
      monospaced while Arabic resolves to the page font, which is the mirror of
      Inter staying in the Arabic sans stack for the same reason. */
-  --barq-font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', 'Cairo', monospace;
+	--barq-font-mono:
+		ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Cairo",
+		monospace;
 
-  /* Article type multiplier -- drives every prose dimension below. */
-  --barq-scale: 1.25;
-  /* UI chrome multiplier -- keeps sidebar / TOC / buttons in proportion to the
+	/* Article type multiplier -- drives every prose dimension below. */
+	--barq-scale: 1.25;
+	/* UI chrome multiplier -- keeps sidebar / TOC / buttons in proportion to the
      article. See "Chrome scale" further down. */
-  --barq-ui-scale: 1.15;
+	--barq-ui-scale: 1.15;
 }
 
 /* Cairo sets denser than Inter, so Arabic gets a slightly larger article and a
    slightly larger chrome step on top of it. */
-html[lang='ar'] {
-  --barq-scale: 1.375;
-  --barq-ui-scale: 1.2;
+html[lang="ar"] {
+	--barq-scale: 1.375;
+	--barq-ui-scale: 1.2;
 }
 
 html {
-  scrollbar-gutter: stable;
-  scroll-behavior: smooth;
+	scrollbar-gutter: stable;
+	scroll-behavior: smooth;
 }
 
 html > body[data-scroll-locked] {
-  margin-right: 0px !important;
-  --removed-body-scroll-bar-size: 0px !important;
+	margin-right: 0px !important;
+	--removed-body-scroll-bar-size: 0px !important;
 }
 
 body {
-  font-family: var(--barq-font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+	font-family: var(--barq-font-sans);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
 }
 
 /* Cairo first for Arabic; Inter stays in the stack so Arabic pages still render
    Latin fragments (package names, URLs) in the Latin face. */
-html[lang='ar'],
-html[lang='ar'] body {
-  font-family: var(--barq-font-arabic);
+html[lang="ar"],
+html[lang="ar"] body {
+	font-family: var(--barq-font-arabic);
 }
 
 /* ---------------------------------------------------------------------------
@@ -117,19 +121,19 @@ html[lang='ar'] body {
    --------------------------------------------------------------------------- */
 
 @layer base {
-  a[href],
-  button,
-  summary,
-  label,
-  select,
-  [role='button'] {
-    cursor: pointer;
-  }
+	a[href],
+	button,
+	summary,
+	label,
+	select,
+	[role="button"] {
+		cursor: pointer;
+	}
 
-  :disabled,
-  [aria-disabled='true'] {
-    cursor: not-allowed;
-  }
+	:disabled,
+	[aria-disabled="true"] {
+		cursor: not-allowed;
+	}
 }
 
 /* ---------------------------------------------------------------------------
@@ -146,28 +150,28 @@ html[lang='ar'] body {
    --------------------------------------------------------------------------- */
 
 main .prose {
-  --tw-prose-size: var(--barq-scale);
-  font-family: var(--barq-font-sans);
-  font-size: calc(1rem * var(--tw-prose-size));
-  line-height: 1.75;
+	--tw-prose-size: var(--barq-scale);
+	font-family: var(--barq-font-sans);
+	font-size: calc(1rem * var(--tw-prose-size));
+	line-height: 1.75;
 }
 
-html[lang='ar'] main .prose {
-  font-family: var(--barq-font-arabic);
-  line-height: 1.95;
-  /* Never letter-space Arabic: it breaks cursive joining and reads as a gap. */
-  letter-spacing: 0;
+html[lang="ar"] main .prose {
+	font-family: var(--barq-font-arabic);
+	line-height: 1.95;
+	/* Never letter-space Arabic: it breaks cursive joining and reads as a gap. */
+	letter-spacing: 0;
 }
 
 main .prose p,
 main .prose li {
-  max-width: 70ch;
+	max-width: 70ch;
 }
 
-html[lang='ar'] main .prose p,
-html[lang='ar'] main .prose li {
-  /* Arabic script sets denser per line, so a shorter measure stays comfortable. */
-  max-width: 62ch;
+html[lang="ar"] main .prose p,
+html[lang="ar"] main .prose li {
+	/* Arabic script sets denser per line, so a shorter measure stays comfortable. */
+	max-width: 62ch;
 }
 
 /* Headings -------------------------------------------------------------
@@ -175,90 +179,112 @@ html[lang='ar'] main .prose li {
    that opt out with `not-prose` (card titles, UI chrome) keep their declared
    size instead of inheriting the prose scale. */
 
-main .prose :where(h1):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  font-size: calc(var(--text-3xl) * var(--tw-prose-size));
-  font-weight: 700;
-  line-height: 1.18;
-  letter-spacing: -0.022em;
-  text-wrap: balance;
-  margin-block: 0 0.5em;
+main
+	.prose
+	:where(h1):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	font-size: calc(var(--text-3xl) * var(--tw-prose-size));
+	font-weight: 700;
+	line-height: 1.18;
+	letter-spacing: -0.022em;
+	text-wrap: balance;
+	margin-block: 0 0.5em;
 }
 
-main .prose :where(h2):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  margin-block: 1.9em 0.6em;
-  font-size: 1.5em;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
+main
+	.prose
+	:where(h2):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	margin-block: 1.9em 0.6em;
+	font-size: 1.5em;
+	font-weight: 600;
+	line-height: 1.3;
+	letter-spacing: -0.015em;
+	text-wrap: balance;
 }
 
-main .prose :where(h3):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  margin-block: 1.7em 0.5em;
-  font-size: 1.25em;
-  font-weight: 600;
-  line-height: 1.4;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
+main
+	.prose
+	:where(h3):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	margin-block: 1.7em 0.5em;
+	font-size: 1.25em;
+	font-weight: 600;
+	line-height: 1.4;
+	letter-spacing: -0.015em;
+	text-wrap: balance;
 }
 
 /* Fumadocs leaves h4 at 1em, so it renders the same size as body text. */
-main .prose :where(h4):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  margin-block: 1.6em 0.4em;
-  font-size: 1.1em;
-  font-weight: 600;
-  line-height: 1.5;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
+main
+	.prose
+	:where(h4):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	margin-block: 1.6em 0.4em;
+	font-size: 1.1em;
+	font-weight: 600;
+	line-height: 1.5;
+	letter-spacing: -0.015em;
+	text-wrap: balance;
 }
 
 /* Cairo carries taller Arabic ascenders and descenders, so headings need more
    leading than Inter does at the same size -- and never any letter-spacing,
    which would break the cursive joins. */
-html[lang='ar'] main .prose :where(h1):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  line-height: 1.35;
-  letter-spacing: 0;
+html[lang="ar"]
+	main
+	.prose
+	:where(h1):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	line-height: 1.35;
+	letter-spacing: 0;
 }
 
-html[lang='ar'] main .prose :where(h2):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  line-height: 1.45;
-  letter-spacing: 0;
+html[lang="ar"]
+	main
+	.prose
+	:where(h2):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	line-height: 1.45;
+	letter-spacing: 0;
 }
 
-html[lang='ar'] main .prose :where(h3):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  line-height: 1.6;
-  letter-spacing: 0;
+html[lang="ar"]
+	main
+	.prose
+	:where(h3):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	line-height: 1.6;
+	letter-spacing: 0;
 }
 
-html[lang='ar'] main .prose :where(h4):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  line-height: 1.65;
-  letter-spacing: 0;
+html[lang="ar"]
+	main
+	.prose
+	:where(h4):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	line-height: 1.65;
+	letter-spacing: 0;
 }
 
 /* Inline elements ------------------------------------------------------- */
 
 main .prose p,
 main .prose li {
-  text-wrap: pretty;
+	text-wrap: pretty;
 }
 
-main .prose :where(strong):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
-  font-weight: 600;
+main
+	.prose
+	:where(strong):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+	font-weight: 600;
 }
 
 main .prose a {
-  text-underline-offset: 0.2em;
-  text-decoration-thickness: 0.06em;
+	text-underline-offset: 0.2em;
+	text-decoration-thickness: 0.06em;
 }
 
 main .prose blockquote {
-  font-style: normal;
-  border-inline-start-width: 3px;
-  padding-inline-start: 1.15em;
+	font-style: normal;
+	border-inline-start-width: 3px;
+	padding-inline-start: 1.15em;
 }
 
 main .prose table {
-  font-variant-numeric: tabular-nums;
+	font-variant-numeric: tabular-nums;
 }
 
 /* Component internals ----------------------------------------------------
@@ -270,9 +296,9 @@ main .prose table {
 
 .barq-eyebrow p,
 .barq-bottom-cta p {
-  margin: 0;
-  max-width: none;
-  text-wrap: initial;
+	margin: 0;
+	max-width: none;
+	text-wrap: initial;
 }
 
 /* Code ------------------------------------------------------------------
@@ -281,277 +307,295 @@ main .prose table {
    stay in step with the surrounding text. */
 
 main .prose pre {
-  font-family: var(--barq-font-mono);
-  font-size: calc(0.75rem * var(--tw-prose-size));
-  font-variant-ligatures: none;
-  line-height: 1.65;
+	font-family: var(--barq-font-mono);
+	font-size: calc(0.75rem * var(--tw-prose-size));
+	font-variant-ligatures: none;
+	line-height: 1.65;
 }
 
 main .prose :not(pre) > code {
-  font-size: 0.875em;
-  padding: 0.15em 0.35em;
+	font-size: 0.875em;
+	padding: 0.15em 0.35em;
 }
 
 main .prose pre,
 main .prose code,
 .barq-flow,
 .barq-eyebrow {
-  font-family: var(--barq-font-mono);
+	font-family: var(--barq-font-mono);
 }
 
 main .prose pre,
 main .prose pre code,
 main .prose :not(pre) > code {
-  direction: ltr;
-  text-align: left;
-  unicode-bidi: isolate;
+	direction: ltr;
+	text-align: left;
+	unicode-bidi: isolate;
 }
 
 .barq-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin: 0.5rem 0 1.35rem;
-  color: var(--color-fd-primary);
-  font-size: calc(0.68rem * var(--tw-prose-size));
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  line-height: 1.4;
-  text-transform: uppercase;
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0.5rem 0 1.35rem;
+	color: var(--color-fd-primary);
+	font-size: calc(0.68rem * var(--tw-prose-size));
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	line-height: 1.4;
+	text-transform: uppercase;
 }
 
 /* These eyebrows mix Latin identifiers with Arabic labels. The tracking above is
    right for the Latin run but visibly breaks the cursive joins of the Arabic, so
    Arabic pages opt out of it entirely. */
-html[lang='ar'] .barq-eyebrow,
-html[lang='ar'] .barq-flow-top,
-html[lang='ar'] .barq-bottom-cta div span {
-  letter-spacing: 0;
+html[lang="ar"] .barq-eyebrow,
+html[lang="ar"] .barq-flow-top,
+html[lang="ar"] .barq-bottom-cta div span {
+	letter-spacing: 0;
 }
 
 /* Cairo runs looser than Inter at the same size, so the Arabic page can carry a
    little more weight without the line turning solid. */
-html[lang='ar'] .barq-eyebrow {
-  font-weight: 700;
+html[lang="ar"] .barq-eyebrow {
+	font-weight: 700;
 }
 
 .barq-pulse,
 .barq-live i {
-  width: 0.5rem;
-  height: 0.5rem;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #22d3ee;
-  box-shadow: 0 0 1rem #22d3ee;
+	width: 0.5rem;
+	height: 0.5rem;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: #22d3ee;
+	box-shadow: 0 0 1rem #22d3ee;
 }
 
 /* A solid dot reads as a bullet; the ring turns it into a live indicator. */
 .barq-pulse {
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, #22d3ee 22%, transparent),
-    0 0 1rem #22d3ee;
+	box-shadow:
+		0 0 0 3px color-mix(in srgb, #22d3ee 22%, transparent),
+		0 0 1rem #22d3ee;
 }
 
 /* The separators sit inside one MDX paragraph, so the flex `gap` above never
    reaches them -- they need their own inline margin or the run reads as
    "NODE.JS/نواة". */
 .barq-separator {
-  margin-inline: 0.75em;
-  opacity: 0.45;
+	margin-inline: 0.75em;
+	opacity: 0.45;
 }
 
 .barq-flow {
-  position: relative;
-  overflow: hidden;
-  margin: 1.75rem 0 2.5rem;
-  padding: clamp(1.1rem, 3vw, 1.75rem);
-  border: 1px solid var(--color-fd-border);
-  border-radius: 1.25rem;
-  background:
-    radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--color-fd-primary) 13%, transparent), transparent 65%),
-    var(--color-fd-card);
+	position: relative;
+	overflow: hidden;
+	margin: 1.75rem 0 2.5rem;
+	padding: clamp(1.1rem, 3vw, 1.75rem);
+	border: 1px solid var(--color-fd-border);
+	border-radius: 1.25rem;
+	background:
+		radial-gradient(
+			ellipse at 50% 120%,
+			color-mix(in srgb, var(--color-fd-primary) 13%, transparent),
+			transparent 65%
+		),
+		var(--color-fd-card);
 }
 
 .barq-flow-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--color-fd-border);
-  font-size: calc(0.72rem * var(--tw-prose-size, 1));
-  font-weight: 600;
-  letter-spacing: 0.06em;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 1.5rem;
+	padding-bottom: 0.9rem;
+	border-bottom: 1px solid var(--color-fd-border);
+	font-size: calc(0.72rem * var(--tw-prose-size, 1));
+	font-weight: 600;
+	letter-spacing: 0.06em;
 }
 
 /* The two halves of the header are a title and a status, so they need to read
    as different roles rather than as one sentence split across the row. */
 .barq-flow-top > span:first-child {
-  color: var(--color-fd-foreground);
+	color: var(--color-fd-foreground);
 }
 
 .barq-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-fd-muted-foreground);
-  font-weight: 500;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	color: var(--color-fd-muted-foreground);
+	font-weight: 500;
 }
 
 .barq-live i {
-  width: 0.42rem;
-  height: 0.42rem;
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, #22d3ee 20%, transparent),
-    0 0 0.75rem #22d3ee;
+	width: 0.42rem;
+	height: 0.42rem;
+	box-shadow:
+		0 0 0 3px color-mix(in srgb, #22d3ee 20%, transparent),
+		0 0 0.75rem #22d3ee;
 }
 
 .barq-flow-steps {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 0.75rem;
+	display: flex;
+	align-items: stretch;
+	justify-content: space-between;
+	gap: 0.75rem;
 }
 
 /* `auto 1fr auto` keeps every caption on a shared baseline even when a label
    wraps to two lines, which the larger type made common. */
 .barq-flow-node {
-  display: grid;
-  min-width: 6.5rem;
-  grid-template-rows: auto 1fr auto;
-  gap: 0.4rem;
-  justify-items: start;
+	display: grid;
+	min-width: 6.5rem;
+	grid-template-rows: auto 1fr auto;
+	gap: 0.4rem;
+	justify-items: start;
 }
 
 .barq-flow-icon {
-  display: grid;
-  width: 2.2rem;
-  height: 2.2rem;
-  margin-bottom: 0.3rem;
-  place-items: center;
-  border: 1px solid var(--color-fd-border);
-  border-radius: 0.7rem;
-  background: var(--color-fd-background);
-  font-size: calc(0.62rem * var(--tw-prose-size, 1));
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
+	display: grid;
+	width: 2.2rem;
+	height: 2.2rem;
+	margin-bottom: 0.3rem;
+	place-items: center;
+	border: 1px solid var(--color-fd-border);
+	border-radius: 0.7rem;
+	background: var(--color-fd-background);
+	font-size: calc(0.62rem * var(--tw-prose-size, 1));
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.04em;
 }
 
 .barq-flow-node strong {
-  font-size: calc(0.85rem * var(--tw-prose-size, 1));
-  font-weight: 700;
-  line-height: 1.3;
+	font-size: calc(0.85rem * var(--tw-prose-size, 1));
+	font-weight: 700;
+	line-height: 1.3;
 }
 
 /* Cairo sits lower in its em box than Inter, so the Arabic label needs the
    extra leading or it collides with the technical term below it. */
-html[lang='ar'] .barq-flow-node strong {
-  line-height: 1.5;
+html[lang="ar"] .barq-flow-node strong {
+	line-height: 1.5;
 }
 
 .barq-flow-node small {
-  opacity: 0.75;
-  font-size: calc(0.68rem * var(--tw-prose-size, 1));
+	opacity: 0.75;
+	font-size: calc(0.68rem * var(--tw-prose-size, 1));
 }
 
 /* Only the badge was marked as active, which left the label itself reading the
    same as its neighbours. Carrying the emphasis onto the word makes the current
    stage findable without colour alone. */
 .barq-flow-node-active strong {
-  color: var(--color-fd-primary);
+	color: var(--color-fd-primary);
 }
 
 .barq-flow-node-active .barq-flow-icon {
-  border-color: color-mix(in srgb, var(--color-fd-primary) 65%, transparent);
-  background: color-mix(in srgb, var(--color-fd-primary) 16%, var(--color-fd-background));
-  color: var(--color-fd-primary);
+	border-color: color-mix(in srgb, var(--color-fd-primary) 65%, transparent);
+	background: color-mix(
+		in srgb,
+		var(--color-fd-primary) 16%,
+		var(--color-fd-background)
+	);
+	color: var(--color-fd-primary);
 }
 
 .barq-flow-line {
-  position: relative;
-  width: 100%;
-  max-width: 6rem;
-  height: 1px;
-  flex: 1 1 auto;
-  align-self: center;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--color-fd-primary) 45%, transparent),
-    var(--color-fd-border) 85%
-  );
+	position: relative;
+	width: 100%;
+	max-width: 6rem;
+	height: 1px;
+	flex: 1 1 auto;
+	align-self: center;
+	background: linear-gradient(
+		90deg,
+		color-mix(in srgb, var(--color-fd-primary) 45%, transparent),
+		var(--color-fd-border) 85%
+	);
 }
 
 .barq-flow-line::after {
-  position: absolute;
-  top: -2.5px;
-  right: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #67e8f9;
-  box-shadow: 0 0 0.6rem #67e8f9;
-  content: '';
+	position: absolute;
+	top: -2.5px;
+	right: 0;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #67e8f9;
+	box-shadow: 0 0 0.6rem #67e8f9;
+	content: "";
 }
 
 .prose [data-card] {
-  border-color: var(--color-fd-border);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--color-fd-primary) 7%, var(--color-fd-card)), var(--color-fd-card) 72%);
-  transition: border-color 180ms ease, transform 180ms ease;
+	border-color: var(--color-fd-border);
+	background: linear-gradient(
+		145deg,
+		color-mix(in srgb, var(--color-fd-primary) 7%, var(--color-fd-card)),
+		var(--color-fd-card) 72%
+	);
+	transition:
+		border-color 180ms ease,
+		transform 180ms ease;
 }
 
 .prose [data-card]:hover {
-  border-color: color-mix(in srgb, var(--color-fd-primary) 65%, transparent);
-  transform: translateY(-3px);
+	border-color: color-mix(in srgb, var(--color-fd-primary) 65%, transparent);
+	transform: translateY(-3px);
 }
 
 .barq-bottom-cta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
-  margin: 2rem 0;
-  padding: clamp(1.25rem, 3vw, 2rem);
-  border: 1px solid color-mix(in srgb, var(--color-fd-primary) 40%, transparent);
-  border-radius: 1.25rem;
-  background: color-mix(in srgb, var(--color-fd-primary) 10%, var(--color-fd-card));
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.5rem;
+	margin: 2rem 0;
+	padding: clamp(1.25rem, 3vw, 2rem);
+	border: 1px solid color-mix(in srgb, var(--color-fd-primary) 40%, transparent);
+	border-radius: 1.25rem;
+	background: color-mix(
+		in srgb,
+		var(--color-fd-primary) 10%,
+		var(--color-fd-card)
+	);
 }
 
 .barq-bottom-cta div {
-  display: grid;
-  gap: 0.4rem;
+	display: grid;
+	gap: 0.4rem;
 }
 
 .barq-bottom-cta div span {
-  color: var(--color-fd-primary);
-  font-size: calc(0.7rem * var(--tw-prose-size, 1));
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+	color: var(--color-fd-primary);
+	font-size: calc(0.7rem * var(--tw-prose-size, 1));
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
 }
 
 .barq-bottom-cta div strong {
-  font-size: calc(1.15rem * var(--tw-prose-size, 1));
-  line-height: 1.35;
+	font-size: calc(1.15rem * var(--tw-prose-size, 1));
+	line-height: 1.35;
 }
 
 .barq-bottom-cta > a {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.75rem 1.15rem;
-  border-radius: 0.7rem;
-  background: var(--color-fd-primary);
-  color: var(--color-fd-primary-foreground);
-  font-size: calc(0.9rem * var(--tw-prose-size, 1));
-  font-weight: 700;
-  text-decoration: none;
-  transition: transform 180ms ease;
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 0.8rem;
+	padding: 0.75rem 1.15rem;
+	border-radius: 0.7rem;
+	background: var(--color-fd-primary);
+	color: var(--color-fd-primary-foreground);
+	font-size: calc(0.9rem * var(--tw-prose-size, 1));
+	font-weight: 700;
+	text-decoration: none;
+	transition: transform 180ms ease;
 }
 
 .barq-bottom-cta > a:hover {
-  transform: translateY(-2px);
+	transform: translateY(-2px);
 }
 
 /* The arrow is the only thing on the button that can move without reflowing
@@ -559,32 +603,32 @@ html[lang='ar'] .barq-flow-node strong {
    below mirrors the glyph, and the translate has to mirror with it or the arrow
    would step backwards on Arabic pages. */
 .barq-bottom-cta > a span {
-  transition: translate 180ms ease;
+	transition: translate 180ms ease;
 }
 
 .barq-bottom-cta > a:hover span {
-  translate: -0.2rem 0;
+	translate: -0.2rem 0;
 }
 
-html[dir='rtl'] .barq-bottom-cta > a:hover span {
-  translate: 0.2rem 0;
+html[dir="rtl"] .barq-bottom-cta > a:hover span {
+	translate: 0.2rem 0;
 }
 
-html[dir='rtl'] .barq-flow-top {
-  flex-direction: row-reverse;
+html[dir="rtl"] .barq-flow-top {
+	flex-direction: row-reverse;
 }
 
-html[dir='rtl'] .barq-flow-steps {
-  direction: ltr;
+html[dir="rtl"] .barq-flow-steps {
+	direction: ltr;
 }
 
-html[dir='rtl'] .barq-flow-line::after {
-  right: auto;
-  left: 0;
+html[dir="rtl"] .barq-flow-line::after {
+	right: auto;
+	left: 0;
 }
 
-html[dir='rtl'] .barq-bottom-cta > a span {
-  transform: scaleX(-1);
+html[dir="rtl"] .barq-bottom-cta > a span {
+	transform: scaleX(-1);
 }
 
 /* ---------------------------------------------------------------------------
@@ -616,29 +660,29 @@ html[dir='rtl'] .barq-bottom-cta > a span {
 [data-toc-popover],
 #fd-search-dialog-content,
 #nd-page > :not(.prose) {
-  --text-xs: calc(0.75rem * var(--barq-ui-scale));
-  --text-sm: calc(0.875rem * var(--barq-ui-scale));
-  --spacing: calc(0.25rem * var(--barq-ui-scale));
+	--text-xs: calc(0.75rem * var(--barq-ui-scale));
+	--text-sm: calc(0.875rem * var(--barq-ui-scale));
+	--spacing: calc(0.25rem * var(--barq-ui-scale));
 }
 
 /* The mobile header is a fixed-height strip whose height is derived from
    `--spacing` (`--fd-header-height: calc(var(--spacing) * 14)`), so it takes
    the text steps but not the spacing step -- its labels grow, the bar does not. */
 #nd-subnav {
-  --text-xs: calc(0.75rem * var(--barq-ui-scale));
-  --text-sm: calc(0.875rem * var(--barq-ui-scale));
+	--text-xs: calc(0.75rem * var(--barq-ui-scale));
+	--text-sm: calc(0.875rem * var(--barq-ui-scale));
 }
 
 /* Arbitrary font sizes bypass the `--text-*` steps, so the few elements that
    use them are matched directly. The nav title and the mobile drawer both sit
    at 0.9375rem; the search field is the one `text-lg` in the layout. */
 #nd-sidebar-mobile,
-#nd-sidebar [class~='text-[0.9375rem]'] {
-  font-size: calc(0.9375rem * var(--barq-ui-scale));
+#nd-sidebar [class~="text-[0.9375rem]"] {
+	font-size: calc(0.9375rem * var(--barq-ui-scale));
 }
 
 #fd-search-dialog-content input {
-  font-size: calc(1.125rem * var(--barq-ui-scale));
+	font-size: calc(1.125rem * var(--barq-ui-scale));
 }
 
 /* ---------------------------------------------------------------------------
@@ -653,53 +697,53 @@ html[dir='rtl'] .barq-bottom-cta > a span {
    --------------------------------------------------------------------------- */
 
 #nd-page > h1 {
-  font-size: calc(2rem * var(--barq-scale));
-  line-height: 1.2;
+	font-size: calc(2rem * var(--barq-scale));
+	line-height: 1.2;
 }
 
-html[lang='ar'] #nd-page > h1 {
-  line-height: 1.35;
-  letter-spacing: 0;
+html[lang="ar"] #nd-page > h1 {
+	line-height: 1.35;
+	letter-spacing: 0;
 }
 
 #nd-page > p {
-  font-size: calc(1.125rem * var(--barq-scale));
+	font-size: calc(1.125rem * var(--barq-scale));
 }
 
 @media (max-width: 40rem) {
-  :root {
-    --barq-scale: 1.1875;
-  }
+	:root {
+		--barq-scale: 1.1875;
+	}
 
-  html[lang='ar'] {
-    --barq-scale: 1.25;
-  }
+	html[lang="ar"] {
+		--barq-scale: 1.25;
+	}
 
-  main .prose {
-    line-height: 1.7;
-  }
+	main .prose {
+		line-height: 1.7;
+	}
 
-  html[lang='ar'] main .prose {
-    line-height: 1.9;
-  }
+	html[lang="ar"] main .prose {
+		line-height: 1.9;
+	}
 
-  .barq-flow-steps {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+	.barq-flow-steps {
+		align-items: flex-start;
+		flex-direction: column;
+	}
 
-  .barq-flow-line {
-    width: 1px;
-    height: 1rem;
-    margin-inline-start: 1rem;
-  }
+	.barq-flow-line {
+		width: 1px;
+		height: 1rem;
+		margin-inline-start: 1rem;
+	}
 
-  .barq-flow-line::after {
-    display: none;
-  }
+	.barq-flow-line::after {
+		display: none;
+	}
 
-  .barq-bottom-cta {
-    align-items: stretch;
-    flex-direction: column;
-  }
+	.barq-bottom-cta {
+		align-items: stretch;
+		flex-direction: column;
+	}
 }

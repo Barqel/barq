@@ -5,14 +5,12 @@ import type { EventBusOptions } from "./types";
 export * from "./types";
 export * from "./bus";
 
-export function eventsPlugin<TEvents extends Record<string, any> = Record<string, any>>(
-	options: EventBusOptions = {},
-) {
+export function eventsPlugin<
+	TEvents extends Record<string, any> = Record<string, any>,
+>(options: EventBusOptions = {}) {
 	const bus = new EventBus<TEvents>(options);
 
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		(app as any).events = bus;
 
 		app.use({

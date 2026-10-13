@@ -10,7 +10,10 @@ export function defaultRetryOn(error: unknown, response?: Response): boolean {
 	return false;
 }
 
-export function computeBackoffDelay(attempt: number, options: RetryOptions): number {
+export function computeBackoffDelay(
+	attempt: number,
+	options: RetryOptions,
+): number {
 	const minDelay = options.minDelayMs ?? 100;
 	const maxDelay = options.maxDelayMs ?? 2000;
 	const factor = options.backoffFactor ?? 2;

@@ -1,26 +1,29 @@
 {
-  "name": "@barqel/barq-versioning",
-  "version": "1.0.0",
-  "description": "Zero-dependency, high-performance API versioning plugin for Barq",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "bun build src/index.ts --external @barqel/barq --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
-    "test": "bun test"
-  },
-  "peerDependencies": {
-    "@barqel/barq": ">=1.0.0"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.2.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
-  }
+	"name": "@barqel/barq-versioning",
+	"version": "1.0.0",
+	"description": "Zero-dependency, high-performance API versioning plugin for Barq",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "bun build src/index.ts --external @barqel/barq --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
+		"test": "bun test"
+	},
+	"files": [
+		"dist"
+	],
+	"peerDependencies": {
+		"@barqel/barq": ">=1.0.0"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.0.0"
+	}
 }

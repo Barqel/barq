@@ -10,9 +10,7 @@ export * from "./middleware";
 
 export function compressPlugin(options: CompressOptions = {}) {
 	const mw = compress(options);
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		app.use(mw);
 	};
 }

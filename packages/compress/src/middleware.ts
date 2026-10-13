@@ -6,19 +6,32 @@ import type { CompressOptions, CompressionAlgorithm } from "./types";
 
 export function compress(options: CompressOptions = {}): Middleware {
 	const threshold = options.threshold ?? 1024;
-	const supportedEncodings: CompressionAlgorithm[] = options.encodings ?? ["br", "gzip", "deflate"];
+	const supportedEncodings: CompressionAlgorithm[] = options.encodings ?? [
+		"br",
+		"gzip",
+		"deflate",
+	];
 	const filterFn = options.filter ?? defaultCompressFilter;
 
 	return {
 		async after(ctx: Context, res: Response) {
 			if (ctx.req.method === "HEAD") return res;
-			if (res.status === 204 || res.status === 205 || res.status === 304 || res.body === null) return res;
+			if (
+				res.status === 204 ||
+				res.status === 205 ||
+				res.status === 304 ||
+				res.body === null
+			)
+				return res;
 			if (res.headers.has("content-encoding")) return res;
 
 			const contentType = res.headers.get("content-type") ?? "";
 			if (!filterFn(contentType, ctx)) return res;
 
-			const encoding = negotiateEncoding(ctx.req.headers.get("accept-encoding"), supportedEncodings);
+			const encoding = negotiateEncoding(
+				ctx.req.headers.get("accept-encoding"),
+				supportedEncodings,
+			);
 			if (!encoding || encoding === "identity") return res;
 
 			const rawLength = res.headers.get("content-length");

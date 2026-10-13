@@ -15,7 +15,10 @@ export interface StoreIncrementResult {
 }
 
 export interface RateLimitStore {
-	increment(key: string, windowMs: number): Promise<StoreIncrementResult> | StoreIncrementResult;
+	increment(
+		key: string,
+		windowMs: number,
+	): Promise<StoreIncrementResult> | StoreIncrementResult;
 	decrement?(key: string): Promise<void> | void;
 	reset(key: string): Promise<void> | void;
 	clear(): Promise<void> | void;
@@ -31,5 +34,8 @@ export interface RateLimitOptions {
 	statusCode?: number;
 	message?: unknown;
 	store?: RateLimitStore;
-	onRateLimit?: (ctx: Context, info: RateLimitInfo) => Response | Promise<Response>;
+	onRateLimit?: (
+		ctx: Context,
+		info: RateLimitInfo,
+	) => Response | Promise<Response>;
 }

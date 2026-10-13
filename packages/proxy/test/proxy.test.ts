@@ -26,7 +26,9 @@ describe("@barqel/barq-proxy", () => {
 		const gatewayServer = gateway.listen(0);
 
 		try {
-			const res = await fetch(`http://localhost:${gatewayServer.port}/data?q=search`);
+			const res = await fetch(
+				`http://localhost:${gatewayServer.port}/data?q=search`,
+			);
 			expect(res.status).toBe(200);
 
 			const data = await res.json();
@@ -55,7 +57,9 @@ describe("@barqel/barq-proxy", () => {
 		const gatewayServer = gateway.listen(0);
 
 		try {
-			const res = await fetch(`http://localhost:${gatewayServer.port}/api/users`);
+			const res = await fetch(
+				`http://localhost:${gatewayServer.port}/api/users`,
+			);
 			expect(res.status).toBe(200);
 			const data = await res.json();
 			expect(data.success).toBe(true);
@@ -68,7 +72,10 @@ describe("@barqel/barq-proxy", () => {
 	it("handles onProxyReq and onProxyRes hooks", async () => {
 		const backend = new App();
 		backend.post("/echo", async (ctx) => {
-			return json({ body: await ctx.json(), appended: ctx.req.headers.get("x-appended") });
+			return json({
+				body: await ctx.json(),
+				appended: ctx.req.headers.get("x-appended"),
+			});
 		});
 		const backendServer = backend.listen(0);
 
@@ -83,7 +90,10 @@ describe("@barqel/barq-proxy", () => {
 				onProxyRes: async (res) => {
 					const newHeaders = new Headers(res.headers);
 					newHeaders.set("x-gateway-processed", "done");
-					return new Response(res.body, { status: res.status, headers: newHeaders });
+					return new Response(res.body, {
+						status: res.status,
+						headers: newHeaders,
+					});
 				},
 			}),
 		);

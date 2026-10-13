@@ -5,13 +5,17 @@ import { CircuitBreakerOpenError, createClient } from "../src/index";
 describe("@barqel/barq-client", () => {
 	it("performs GET and POST requests and extracts typed data", async () => {
 		const serverApp = new App();
-		serverApp.get("/users/:id", (ctx) => json({ id: ctx.params.id, name: "Grace Hopper" }));
+		serverApp.get("/users/:id", (ctx) =>
+			json({ id: ctx.params.id, name: "Grace Hopper" }),
+		);
 		serverApp.post("/echo", async (ctx) => json(await ctx.json()));
 
 		const server = serverApp.listen(0);
 
 		try {
-			const client = createClient({ baseUrl: `http://localhost:${server.port}` });
+			const client = createClient({
+				baseUrl: `http://localhost:${server.port}`,
+			});
 
 			const getRes = await client.get("/users/42");
 			expect(getRes.status).toBe(200);
@@ -87,7 +91,9 @@ describe("@barqel/barq-client", () => {
 		const upstreamServer = upstreamApp.listen(0);
 
 		try {
-			const client = createClient({ baseUrl: `http://localhost:${upstreamServer.port}` });
+			const client = createClient({
+				baseUrl: `http://localhost:${upstreamServer.port}`,
+			});
 			const mockCtx = {
 				state: { requestId: "trace-barq-777" },
 				req: { headers: new Headers() },

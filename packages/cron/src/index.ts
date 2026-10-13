@@ -14,7 +14,10 @@ export function cron() {
 		app: App<TState>,
 	) => {
 		(app as any).cron = scheduler;
-		(app as any).schedule = (pattern: string, task: CronTask, options?: CronJobOptions) =>
-			scheduler.add(pattern, task, options);
+		(app as any).schedule = (
+			pattern: string,
+			task: CronTask,
+			options?: CronJobOptions,
+		) => scheduler.add(pattern, task, options);
 	};
 }

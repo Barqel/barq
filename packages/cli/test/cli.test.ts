@@ -19,7 +19,16 @@ describe("@barqel/barq-cli", () => {
 			},
 		);
 
-		await cli.run(["node", "cli.js", "user:create", "Grace", "admin", "--teamId", "42", "--active"]);
+		await cli.run([
+			"node",
+			"cli.js",
+			"user:create",
+			"Grace",
+			"admin",
+			"--teamId",
+			"42",
+			"--active",
+		]);
 
 		expect(captured).toBeDefined();
 		expect(captured.args.name).toBe("Grace");

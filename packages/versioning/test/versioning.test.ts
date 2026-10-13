@@ -11,7 +11,8 @@ describe("@barqel/barq-versioning", () => {
 			version(
 				{
 					"1": () => json({ version: 1, name: "Ada Lovelace" }),
-					"2": () => json({ version: 2, firstName: "Ada", lastName: "Lovelace" }),
+					"2": () =>
+						json({ version: 2, firstName: "Ada", lastName: "Lovelace" }),
 				},
 				{ defaultVersion: "1" },
 			),
@@ -22,7 +23,10 @@ describe("@barqel/barq-versioning", () => {
 		try {
 			const resDefault = await fetch(`http://localhost:${server.port}/users`);
 			expect(resDefault.status).toBe(200);
-			expect(await resDefault.json()).toEqual({ version: 1, name: "Ada Lovelace" });
+			expect(await resDefault.json()).toEqual({
+				version: 1,
+				name: "Ada Lovelace",
+			});
 
 			const resV1 = await fetch(`http://localhost:${server.port}/users`, {
 				headers: { "Accept-Version": "v1" },
@@ -39,7 +43,11 @@ describe("@barqel/barq-versioning", () => {
 				headers: { "Accept-Version": "2" },
 			});
 			expect(resV2Exact.status).toBe(200);
-			expect(await resV2Exact.json()).toEqual({ version: 2, firstName: "Ada", lastName: "Lovelace" });
+			expect(await resV2Exact.json()).toEqual({
+				version: 2,
+				firstName: "Ada",
+				lastName: "Lovelace",
+			});
 		} finally {
 			await app.stop();
 		}
@@ -62,7 +70,9 @@ describe("@barqel/barq-versioning", () => {
 		const server = app.listen(0);
 
 		try {
-			const resV2 = await fetch(`http://localhost:${server.port}/items?api-version=2`);
+			const resV2 = await fetch(
+				`http://localhost:${server.port}/items?api-version=2`,
+			);
 			expect(resV2.status).toBe(200);
 			expect(await resV2.json()).toEqual({ data: [{ id: "a" }, { id: "b" }] });
 		} finally {
@@ -80,7 +90,11 @@ describe("@barqel/barq-versioning", () => {
 					"1": () => json({ legacy: true }),
 					"2": () => json({ modern: true }),
 				},
-				{ type: "media-type", mediaTypePrefix: "application/vnd.barq", defaultVersion: "1" },
+				{
+					type: "media-type",
+					mediaTypePrefix: "application/vnd.barq",
+					defaultVersion: "1",
+				},
 			),
 		);
 

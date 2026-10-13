@@ -9,7 +9,13 @@ export interface StaticOptions {
 	immutable?: boolean;
 	etag?: boolean;
 	dotfiles?: "allow" | "deny" | "ignore";
-	setHeaders?: (res: Response, path: string, stat: { size: number; mtimeMs: number }) => void;
+	setHeaders?: (
+		res: Response,
+		path: string,
+		stat: { size: number; mtimeMs: number },
+	) => void;
 }
 
-export type StaticHandler = (ctx: Context<Record<string, string>>) => Promise<Response>;
+export type StaticHandler = (
+	ctx: Context<Record<string, string>>,
+) => Promise<Response>;

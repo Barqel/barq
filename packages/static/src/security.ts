@@ -1,6 +1,9 @@
 import { resolve, sep } from "node:path";
 
-export function sanitizePath(baseDir: string, requestedPath: string): string | null {
+export function sanitizePath(
+	baseDir: string,
+	requestedPath: string,
+): string | null {
 	if (requestedPath.includes("\0")) {
 		return null;
 	}
@@ -11,10 +14,16 @@ export function sanitizePath(baseDir: string, requestedPath: string): string | n
 	}
 
 	const normalized = decoded.replace(/\\/g, "/");
-	const absolutePath = resolve(baseDir, `.${normalized.startsWith("/") ? "" : "/"}${normalized}`);
+	const absolutePath = resolve(
+		baseDir,
+		`.${normalized.startsWith("/") ? "" : "/"}${normalized}`,
+	);
 	const canonicalBase = resolve(baseDir);
 
-	if (absolutePath !== canonicalBase && !absolutePath.startsWith(`${canonicalBase}${sep}`)) {
+	if (
+		absolutePath !== canonicalBase &&
+		!absolutePath.startsWith(`${canonicalBase}${sep}`)
+	) {
 		return null;
 	}
 

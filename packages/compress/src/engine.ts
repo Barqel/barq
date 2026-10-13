@@ -7,11 +7,15 @@ export function compressStream(
 	algorithm: CompressionAlgorithm,
 ): ReadableStream<Uint8Array> {
 	if (algorithm === "gzip") {
-		return stream.pipeThrough(new CompressionStream("gzip"));
+		return stream.pipeThrough(
+			new CompressionStream("gzip") as unknown as ReadableWritablePair<Uint8Array>,
+		);
 	}
 
 	if (algorithm === "deflate") {
-		return stream.pipeThrough(new CompressionStream("deflate"));
+		return stream.pipeThrough(
+			new CompressionStream("deflate") as unknown as ReadableWritablePair<Uint8Array>,
+		);
 	}
 
 	if (algorithm === "br") {

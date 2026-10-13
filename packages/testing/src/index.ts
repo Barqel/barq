@@ -6,10 +6,16 @@ export * from "./types";
 export * from "./cookies";
 export * from "./client";
 
-export function testClient(app: App<any>, options?: TestClientOptions): TestClient {
+export function testClient(
+	app: App<any>,
+	options?: TestClientOptions,
+): TestClient {
 	return new TestClient(app, options);
 }
 
-export function createTestClient(app: App<any>, options?: TestClientOptions): TestClient {
+export function createTestClient(
+	app: App<any>,
+	options?: TestClientOptions,
+): TestClient {
 	return new TestClient(app, options);
 }

@@ -23,7 +23,7 @@ export function createProxy(options: ProxyOptions) {
 				: originalPath;
 
 			const url = new URL(rewrittenPath, targetUrl);
-			
+
 			const query = ctx.query.toString();
 			if (query) {
 				url.search = query;
@@ -42,7 +42,9 @@ export function createProxy(options: ProxyOptions) {
 
 			if (options.headers) {
 				const customHeaders =
-					typeof options.headers === "function" ? await options.headers(ctx) : options.headers;
+					typeof options.headers === "function"
+						? await options.headers(ctx)
+						: options.headers;
 				for (const [k, v] of Object.entries(customHeaders)) {
 					headers.set(k, v);
 				}
@@ -84,7 +86,10 @@ export function createProxy(options: ProxyOptions) {
 
 			return response;
 		} catch (err) {
-			throw new HttpError(502, { error: "Bad Gateway", details: err instanceof Error ? err.message : String(err) });
+			throw new HttpError(502, {
+				error: "Bad Gateway",
+				details: err instanceof Error ? err.message : String(err),
+			});
 		}
 	};
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { App, json } from "@barqel/barq";
-import { type LogRecord, type RequestLogger, loggerPlugin, requestLogger } from "../src/index";
+import {
+	type LogRecord,
+	type RequestLogger,
+	loggerPlugin,
+	requestLogger,
+} from "../src/index";
 
 describe("@barqel/barq-logger", () => {
 	it("generates and attaches x-request-id to responses", async () => {

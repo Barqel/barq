@@ -1,7 +1,4 @@
 {
-  "title": "مقدمة",
-  "pages": [
-    "overview",
-    "architecture"
-  ]
+	"title": "مقدمة",
+	"pages": ["overview", "architecture"]
 }

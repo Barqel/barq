@@ -41,7 +41,11 @@ export class OpenAPIRegistry {
 		const parameters: Array<Record<string, unknown>> = [];
 
 		const pathMatches = pattern.matchAll(/:([a-zA-Z0-9_]+)(\?)?/g);
-		const schemaParams = schema?.params ? toJsonSchema(schema.params).properties as Record<string, unknown> | undefined : undefined;
+		const schemaParams = schema?.params
+			? (toJsonSchema(schema.params).properties as
+					| Record<string, unknown>
+					| undefined)
+			: undefined;
 
 		for (const match of pathMatches) {
 			const name = match[1]!;

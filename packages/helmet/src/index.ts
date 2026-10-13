@@ -34,9 +34,7 @@ export function helmet(options: HelmetOptions = {}): Middleware {
 
 export function helmetPlugin(options: HelmetOptions = {}) {
 	const mw = helmet(options);
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		app.use(mw);
 	};
 }

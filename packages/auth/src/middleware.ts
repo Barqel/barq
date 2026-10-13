@@ -2,7 +2,9 @@ import { type Context, HttpError, type Middleware } from "@barqel/barq";
 import { AuthError, verifyJwt } from "./jwt";
 import type { BearerAuthOptions, JwtPayload } from "./types";
 
-export function bearerAuth<TUser = JwtPayload>(options: BearerAuthOptions<TUser>): Middleware {
+export function bearerAuth<TUser = JwtPayload>(
+	options: BearerAuthOptions<TUser>,
+): Middleware {
 	const headerName = options.headerName?.toLowerCase() ?? "authorization";
 	const cookieName = options.cookieName;
 
@@ -31,18 +33,24 @@ export function bearerAuth<TUser = JwtPayload>(options: BearerAuthOptions<TUser>
 				});
 			}
 
-			const secret = typeof options.secret === "function" ? await options.secret(ctx) : options.secret;
+			const secret =
+				typeof options.secret === "function"
+					? await options.secret(ctx)
+					: options.secret;
 
 			try {
 				const payload = verifyJwt(token, secret, options.verifyOptions);
-				const user = options.resolveUser ? await options.resolveUser(payload, ctx) : (payload as unknown as TUser);
+				const user = options.resolveUser
+					? await options.resolveUser(payload, ctx)
+					: (payload as unknown as TUser);
 
 				const state = ctx.state as Record<string, unknown>;
 				state.user = user;
 				state.token = token;
 			} catch (err) {
 				if (options.optional) return;
-				const message = err instanceof AuthError ? err.message : "Invalid or expired token";
+				const message =
+					err instanceof AuthError ? err.message : "Invalid or expired token";
 				const code = err instanceof AuthError ? err.code : "INVALID_TOKEN";
 				throw new HttpError(401, { error: "Unauthorized", code, message });
 			}
@@ -53,13 +61,25 @@ export function bearerAuth<TUser = JwtPayload>(options: BearerAuthOptions<TUser>
 export function requireRoles(...allowedRoles: string[]): Middleware {
 	return {
 		before(ctx: Context) {
-			const user = (ctx.state as Record<string, unknown>).user as Record<string, unknown> | undefined;
+			const user = (ctx.state as Record<string, unknown>).user as
+				| Record<string, unknown>
+				| undefined;
 			if (!user) {
-				throw new HttpError(401, { error: "Unauthorized", code: "UNAUTHENTICATED" });
+				throw new HttpError(401, {
+					error: "Unauthorized",
+					code: "UNAUTHENTICATED",
+				});
 			}
 
-			const userRole = (user.role ?? user.roles) as string | string[] | undefined;
-			const roles = Array.isArray(userRole) ? userRole : userRole ? [userRole] : [];
+			const userRole = (user.role ?? user.roles) as
+				| string
+				| string[]
+				| undefined;
+			const roles = Array.isArray(userRole)
+				? userRole
+				: userRole
+					? [userRole]
+					: [];
 
 			const hasRole = allowedRoles.some((r) => roles.includes(r));
 			if (!hasRole) {

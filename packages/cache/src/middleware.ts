@@ -8,7 +8,7 @@ const defaultStore = new MemoryCacheStore();
 export function cache(options: CacheOptions = {}): Middleware {
 	const ttlMs = options.ttlMs ?? 60_000;
 	const methods = options.methods ?? ["GET", "HEAD"];
-	const enableEtag = options.etag ?? true;
+	const enableEtag = options.enableEtag ?? true;
 	const cacheControl = options.cacheControl ?? true;
 	const store: CacheStore = options.store ?? defaultStore;
 
@@ -38,7 +38,10 @@ export function cache(options: CacheOptions = {}): Middleware {
 					const res304 = empty(304);
 					res304.headers.set("etag", entry.etag);
 					if (cacheControl) {
-						res304.headers.set("cache-control", `public, max-age=${Math.floor(ttlMs / 1000)}`);
+						res304.headers.set(
+							"cache-control",
+							`public, max-age=${Math.floor(ttlMs / 1000)}`,
+						);
 					}
 					return res304;
 				}
@@ -46,7 +49,11 @@ export function cache(options: CacheOptions = {}): Middleware {
 
 			const headers = new Headers(entry.headers);
 			if (enableEtag && entry.etag) headers.set("etag", entry.etag);
-			if (cacheControl) headers.set("cache-control", `public, max-age=${Math.floor(ttlMs / 1000)}`);
+			if (cacheControl)
+				headers.set(
+					"cache-control",
+					`public, max-age=${Math.floor(ttlMs / 1000)}`,
+				);
 			headers.set("x-cache", "HIT");
 
 			if (ctx.req.method === "HEAD") {
@@ -90,7 +97,10 @@ export function cache(options: CacheOptions = {}): Middleware {
 				}
 
 				if (cacheControl) {
-					finalHeaders.set("cache-control", `public, max-age=${Math.floor(ttlMs / 1000)}`);
+					finalHeaders.set(
+						"cache-control",
+						`public, max-age=${Math.floor(ttlMs / 1000)}`,
+					);
 				}
 
 				finalHeaders.set("x-cache", "MISS");

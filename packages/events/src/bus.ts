@@ -5,9 +5,14 @@ interface ListenerWrapper {
 	once: boolean;
 }
 
-export class EventBus<TEvents extends Record<string, any> = Record<string, any>> {
+export class EventBus<
+	TEvents extends Record<string, any> = Record<string, any>,
+> {
 	private readonly listeners = new Map<string, Set<ListenerWrapper>>();
-	private readonly wildcardListeners = new Set<{ pattern: RegExp; wrapper: ListenerWrapper }>();
+	private readonly wildcardListeners = new Set<{
+		pattern: RegExp;
+		wrapper: ListenerWrapper;
+	}>();
 	private readonly options: EventBusOptions;
 
 	constructor(options: EventBusOptions = {}) {
@@ -19,13 +24,19 @@ export class EventBus<TEvents extends Record<string, any> = Record<string, any>>
 		};
 	}
 
-	on<K extends keyof TEvents & string>(event: K, listener: EventListener<TEvents[K]>): () => void;
+	on<K extends keyof TEvents & string>(
+		event: K,
+		listener: EventListener<TEvents[K]>,
+	): () => void;
 	on(event: string, listener: EventListener): () => void;
 	on(event: string, listener: EventListener): () => void {
 		return this.addListener(event, listener, false);
 	}
 
-	once<K extends keyof TEvents & string>(event: K, listener: EventListener<TEvents[K]>): () => void;
+	once<K extends keyof TEvents & string>(
+		event: K,
+		listener: EventListener<TEvents[K]>,
+	): () => void;
 	once(event: string, listener: EventListener): () => void;
 	once(event: string, listener: EventListener): () => void {
 		return this.addListener(event, listener, true);
@@ -56,7 +67,10 @@ export class EventBus<TEvents extends Record<string, any> = Record<string, any>>
 		}
 	}
 
-	async emit<K extends keyof TEvents & string>(event: K, payload: TEvents[K]): Promise<void>;
+	async emit<K extends keyof TEvents & string>(
+		event: K,
+		payload: TEvents[K],
+	): Promise<void>;
 	async emit(event: string, payload?: unknown): Promise<void>;
 	async emit(event: string, payload?: unknown): Promise<void> {
 		return this.emitParallel(event, payload);
@@ -94,7 +108,9 @@ export class EventBus<TEvents extends Record<string, any> = Record<string, any>>
 			try {
 				const result = wrapper.fn(payload, event);
 				if (result && typeof (result as any).catch === "function") {
-					(result as any).catch((err: unknown) => this.handleError(err, event, payload));
+					(result as any).catch((err: unknown) =>
+						this.handleError(err, event, payload),
+					);
 				}
 			} catch (err) {
 				this.handleError(err, event, payload);
@@ -107,11 +123,17 @@ export class EventBus<TEvents extends Record<string, any> = Record<string, any>>
 		this.wildcardListeners.clear();
 	}
 
-	private addListener(event: string, fn: EventListener, once: boolean): () => void {
+	private addListener(
+		event: string,
+		fn: EventListener,
+		once: boolean,
+	): () => void {
 		const wrapper: ListenerWrapper = { fn, once };
 
 		if (this.options.wildcards && event.includes("*")) {
-			const escaped = event.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+			const escaped = event
+				.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+				.replace(/\*/g, ".*");
 			const pattern = new RegExp(`^${escaped}$`);
 			this.wildcardListeners.add({ pattern, wrapper });
 			return () => this.off(event, fn);

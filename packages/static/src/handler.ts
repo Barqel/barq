@@ -10,16 +10,18 @@ const isBun = typeof Bun !== "undefined";
 
 export function createStaticHandler(options: StaticOptions): StaticHandler {
 	const rootDir = options.root;
-	const indexFile = options.index === false ? null : (options.index ?? "index.html");
-	const spaFallback = options.spa === true ? "index.html" : (options.spa || null);
+	const indexFile =
+		options.index === false ? null : (options.index ?? "index.html");
+	const spaFallback = options.spa === true ? "index.html" : options.spa || null;
 	const maxAge = options.maxAge ?? 0;
 	const immutable = options.immutable ?? false;
 	const enableEtag = options.etag ?? true;
 	const dotfiles = options.dotfiles ?? "ignore";
 
-	const cacheControlHeader = maxAge > 0
-		? `public, max-age=${maxAge}${immutable ? ", immutable" : ""}`
-		: "public, max-age=0, must-revalidate";
+	const cacheControlHeader =
+		maxAge > 0
+			? `public, max-age=${maxAge}${immutable ? ", immutable" : ""}`
+			: "public, max-age=0, must-revalidate";
 
 	return async (ctx: Context): Promise<Response> => {
 		if (ctx.req.method !== "GET" && ctx.req.method !== "HEAD") {
@@ -38,7 +40,9 @@ export function createStaticHandler(options: StaticOptions): StaticHandler {
 		}
 
 		if (dotfiles !== "allow" && isDotFile(relative)) {
-			return dotfiles === "deny" ? new Response("Forbidden", { status: 403 }) : new Response("Not Found", { status: 404 });
+			return dotfiles === "deny"
+				? new Response("Forbidden", { status: 403 })
+				: new Response("Not Found", { status: 404 });
 		}
 
 		let absolute = sanitizePath(rootDir, relative);
@@ -79,7 +83,9 @@ export function createStaticHandler(options: StaticOptions): StaticHandler {
 			}
 		}
 
-		const etag = enableEtag ? `W/"${fileStat.size.toString(16)}-${Math.floor(fileStat.mtimeMs).toString(16)}"` : null;
+		const etag = enableEtag
+			? `W/"${fileStat.size.toString(16)}-${Math.floor(fileStat.mtimeMs).toString(16)}"`
+			: null;
 
 		if (etag && ctx.req.headers.get("if-none-match") === etag) {
 			const res304 = empty(304);
@@ -91,8 +97,19 @@ export function createStaticHandler(options: StaticOptions): StaticHandler {
 		const mimeType = getMimeType(absolute);
 		const rangeHeader = ctx.req.headers.get("range");
 
-		if (rangeHeader && rangeHeader.startsWith("bytes=") && !rangeHeader.includes(",")) {
-			const rangeRes = await handleRangeRequest(absolute, fileStat.size, rangeHeader, mimeType, etag, cacheControlHeader);
+		if (
+			rangeHeader &&
+			rangeHeader.startsWith("bytes=") &&
+			!rangeHeader.includes(",")
+		) {
+			const rangeRes = await handleRangeRequest(
+				absolute,
+				fileStat.size,
+				rangeHeader,
+				mimeType,
+				etag,
+				cacheControlHeader,
+			);
 			if (rangeRes) return rangeRes;
 		}
 
@@ -138,7 +155,9 @@ export function createStaticHandler(options: StaticOptions): StaticHandler {
 	};
 }
 
-async function getFileStat(path: string): Promise<{ size: number; mtimeMs: number; isDirectory: boolean } | null> {
+async function getFileStat(
+	path: string,
+): Promise<{ size: number; mtimeMs: number; isDirectory: boolean } | null> {
 	try {
 		const s = await stat(path);
 		return { size: s.size, mtimeMs: s.mtimeMs, isDirectory: s.isDirectory() };

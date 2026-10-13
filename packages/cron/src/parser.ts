@@ -23,7 +23,9 @@ export function parseCronExpression(expression: string): ParsedCronFields {
 
 	const parts = expr.split(/\s+/);
 	if (parts.length !== 5 && parts.length !== 6) {
-		throw new Error(`Invalid cron pattern: "${expression}". Must contain 5 or 6 fields.`);
+		throw new Error(
+			`Invalid cron pattern: "${expression}". Must contain 5 or 6 fields.`,
+		);
 	}
 
 	const hasSeconds = parts.length === 6;
@@ -45,13 +47,19 @@ export function parseCronExpression(expression: string): ParsedCronFields {
 	};
 }
 
-function parseField(field: string, min: number, max: number, isDayOfWeek = false): Set<number> {
+function parseField(
+	field: string,
+	min: number,
+	max: number,
+	isDayOfWeek = false,
+): Set<number> {
 	const values = new Set<number>();
 	const items = field.split(",");
 
 	for (const item of items) {
 		if (item === "*") {
-			for (let i = min; i <= max; i++) values.add(isDayOfWeek && i === 7 ? 0 : i);
+			for (let i = min; i <= max; i++)
+				values.add(isDayOfWeek && i === 7 ? 0 : i);
 			continue;
 		}
 
@@ -66,7 +74,9 @@ function parseField(field: string, min: number, max: number, isDayOfWeek = false
 			let end = max;
 			if (rangePart !== "*") {
 				if (rangePart.includes("-")) {
-					const [rStart, rEnd] = rangePart.split("-").map((v) => Number.parseInt(v, 10));
+					const [rStart, rEnd] = rangePart
+						.split("-")
+						.map((v) => Number.parseInt(v, 10));
 					start = rStart!;
 					end = rEnd!;
 				} else {
@@ -81,8 +91,16 @@ function parseField(field: string, min: number, max: number, isDayOfWeek = false
 		}
 
 		if (item.includes("-")) {
-			const [start, end] = item.split("-").map((v) => Number.parseInt(v, 10)) as [number, number];
-			if (Number.isNaN(start) || Number.isNaN(end) || start > end || start < min || end > max) {
+			const [start, end] = item
+				.split("-")
+				.map((v) => Number.parseInt(v, 10)) as [number, number];
+			if (
+				Number.isNaN(start) ||
+				Number.isNaN(end) ||
+				start > end ||
+				start < min ||
+				end > max
+			) {
 				throw new Error(`Invalid range in: "${item}"`);
 			}
 			for (let i = start; i <= end; i++) {
@@ -93,7 +111,9 @@ function parseField(field: string, min: number, max: number, isDayOfWeek = false
 
 		const num = Number.parseInt(item, 10);
 		if (Number.isNaN(num) || num < min || num > max) {
-			throw new Error(`Invalid field value: "${item}" outside range ${min}-${max}`);
+			throw new Error(
+				`Invalid field value: "${item}" outside range ${min}-${max}`,
+			);
 		}
 		values.add(isDayOfWeek && num === 7 ? 0 : num);
 	}
@@ -150,7 +170,10 @@ function parseInterval(interval: string): ParsedCronFields {
 	throw new Error(`Unsupported interval unit: "${unit}"`);
 }
 
-export function getNextCronRun(fields: ParsedCronFields, fromDate: Date = new Date()): Date {
+export function getNextCronRun(
+	fields: ParsedCronFields,
+	fromDate: Date = new Date(),
+): Date {
 	const next = new Date(fromDate.getTime());
 	const stepMs = fields.hasSeconds ? 1000 : 60000;
 

@@ -9,7 +9,9 @@ const isBun = typeof Bun !== "undefined";
 export function upload(options: UploadOptions = {}): Middleware {
 	const maxFileSize = options.maxFileSize ?? Number.POSITIVE_INFINITY;
 	const maxFiles = options.maxFiles ?? Number.POSITIVE_INFINITY;
-	const accept = options.accept ? new Set(options.accept.map(a => a.toLowerCase())) : null;
+	const accept = options.accept
+		? new Set(options.accept.map((a) => a.toLowerCase()))
+		: null;
 	let destCreated = false;
 
 	return {
@@ -23,7 +25,9 @@ export function upload(options: UploadOptions = {}): Middleware {
 			try {
 				form = await ctx.formData();
 			} catch {
-				throw new HttpError(400, { error: "Invalid multipart/form-data payload" });
+				throw new HttpError(400, {
+					error: "Invalid multipart/form-data payload",
+				});
 			}
 
 			const files: UploadedFile[] = [];
@@ -34,11 +38,19 @@ export function upload(options: UploadOptions = {}): Middleware {
 					await mkdir(options.dest, { recursive: true });
 					destCreated = true;
 				} catch (err) {
-					throw new HttpError(500, { error: "Failed to create upload destination directory" });
+					throw new HttpError(500, {
+						error: "Failed to create upload destination directory",
+					});
 				}
 			}
 
-			for (const [field, value] of form.entries()) {
+			// `FormData.entries()` is declared as `[string, string]` in bun-types,
+			// so widen it to the runtime shape to keep file entries reachable.
+			const entries = form.entries() as unknown as IterableIterator<
+				[string, string | File]
+			>;
+
+			for (const [field, value] of entries) {
 				if (value instanceof File) {
 					fileCount++;
 
@@ -58,8 +70,12 @@ export function upload(options: UploadOptions = {}): Middleware {
 
 					// استخراج النوع الأساسي وتجاهل الـ charset إذا وُجد
 					const fileType = value.type.split(";")[0]?.trim().toLowerCase() || "";
-					
-					if (accept !== null && !accept.has(fileType) && !accept.has(value.type.toLowerCase())) {
+
+					if (
+						accept !== null &&
+						!accept.has(fileType) &&
+						!accept.has(value.type.toLowerCase())
+					) {
 						throw new HttpError(415, {
 							error: "Unsupported Media Type",
 							message: `File type '${value.type}' is not allowed`,

@@ -16,4 +16,7 @@ export interface I18nOptions {
 	extractor?: (ctx: Context) => string | null | Promise<string | null>;
 }
 
-export type TranslateFunction = (key: string, params?: Record<string, string | number>) => string;
+export type TranslateFunction = (
+	key: string,
+	params?: Record<string, string | number>,
+) => string;

@@ -12,7 +12,8 @@ export function requestLogger(options: LoggerOptions = {}): Middleware {
 			if (options.skip?.(ctx)) return;
 
 			const existingId = ctx.req.headers.get(headerName);
-			const requestId = existingId && existingId.trim().length > 0 ? existingId : idGenerator();
+			const requestId =
+				existingId && existingId.trim().length > 0 ? existingId : idGenerator();
 
 			const state = ctx.state as Record<string, unknown>;
 			state.requestId = requestId;

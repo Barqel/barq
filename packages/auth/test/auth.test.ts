@@ -1,13 +1,22 @@
 import { describe, expect, it } from "bun:test";
 import { App, json } from "@barqel/barq";
-import { bearerAuth, hashPassword, requireRoles, signJwt, verifyJwt, verifyPassword } from "../src/index";
+import {
+	bearerAuth,
+	hashPassword,
+	requireRoles,
+	signJwt,
+	verifyJwt,
+	verifyPassword,
+} from "../src/index";
 
 describe("@barqel/barq-auth", () => {
 	const secret = "super-secret-key-at-least-32-chars-long";
 
 	describe("JWT Engine", () => {
 		it("signs and verifies JWT payload", () => {
-			const token = signJwt({ sub: "user-42", role: "admin" }, secret, { expiresIn: "1h" });
+			const token = signJwt({ sub: "user-42", role: "admin" }, secret, {
+				expiresIn: "1h",
+			});
 			expect(typeof token).toBe("string");
 
 			const verified = verifyJwt(token, secret);
@@ -24,7 +33,9 @@ describe("@barqel/barq-auth", () => {
 
 		it("throws when signature is invalid", () => {
 			const token = signJwt({ sub: "user-42" }, secret);
-			expect(() => verifyJwt(token, "wrong-secret")).toThrow("Invalid token signature");
+			expect(() => verifyJwt(token, "wrong-secret")).toThrow(
+				"Invalid token signature",
+			);
 		});
 	});
 
@@ -52,15 +63,23 @@ describe("@barqel/barq-auth", () => {
 			const server = app.listen(0);
 
 			try {
-				const resNoAuth = await fetch(`http://localhost:${server.port}/protected`);
+				const resNoAuth = await fetch(
+					`http://localhost:${server.port}/protected`,
+				);
 				expect(resNoAuth.status).toBe(401);
 
-				const resAuth = await fetch(`http://localhost:${server.port}/protected`, {
-					headers: { Authorization: `Bearer ${token}` },
-				});
+				const resAuth = await fetch(
+					`http://localhost:${server.port}/protected`,
+					{
+						headers: { Authorization: `Bearer ${token}` },
+					},
+				);
 				expect(resAuth.status).toBe(200);
 				const data = await resAuth.json();
-				expect(data).toMatchObject({ authenticated: true, user: { id: "usr_101", role: "admin" } });
+				expect(data).toMatchObject({
+					authenticated: true,
+					user: { id: "usr_101", role: "admin" },
+				});
 			} finally {
 				await app.stop();
 			}
@@ -71,7 +90,9 @@ describe("@barqel/barq-auth", () => {
 			const userToken = signJwt({ sub: "regular-user", role: "user" }, secret);
 			const adminToken = signJwt({ sub: "admin-user", role: "admin" }, secret);
 
-			app.get("/admin", bearerAuth({ secret }), requireRoles("admin"), () => json({ access: "granted" }));
+			app.get("/admin", bearerAuth({ secret }), requireRoles("admin"), () =>
+				json({ access: "granted" }),
+			);
 
 			const server = app.listen(0);
 

@@ -3,7 +3,9 @@ import { EventBus } from "../src/index";
 
 describe("@barqel/barq-events", () => {
 	it("emits events and handles listeners asynchronously", async () => {
-		const bus = new EventBus<{ "user.created": { id: string; email: string } }>();
+		const bus = new EventBus<{
+			"user.created": { id: string; email: string };
+		}>();
 		let captured: any = null;
 
 		bus.on("user.created", async (payload) => {

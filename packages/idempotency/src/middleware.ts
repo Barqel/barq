@@ -12,13 +12,21 @@ export function idempotency(options: IdempotencyOptions = {}): Middleware {
 
 	return {
 		async before(ctx: Context) {
-			if (ctx.req.method === "GET" || ctx.req.method === "HEAD" || ctx.req.method === "OPTIONS") return;
+			if (
+				ctx.req.method === "GET" ||
+				ctx.req.method === "HEAD" ||
+				ctx.req.method === "OPTIONS"
+			)
+				return;
 
 			const key = ctx.req.headers.get(headerName);
 
 			if (!key) {
 				if (enforceHeader) {
-					const body = options.errorMessage ?? { error: "Bad Request", message: `Missing ${headerName} header` };
+					const body = options.errorMessage ?? {
+						error: "Bad Request",
+						message: `Missing ${headerName} header`,
+					};
 					throw new HttpError(400, body);
 				}
 				return;
@@ -28,8 +36,14 @@ export function idempotency(options: IdempotencyOptions = {}): Middleware {
 
 			if (record) {
 				if (record.status === "IN_PROGRESS") {
-					const body = options.conflictMessage ?? { error: "Conflict", message: "Concurrent request in progress for this idempotency key" };
-					const res = typeof body === "string" ? new Response(body, { status: 409 }) : json(body, 409);
+					const body = options.conflictMessage ?? {
+						error: "Conflict",
+						message: "Concurrent request in progress for this idempotency key",
+					};
+					const res =
+						typeof body === "string"
+							? new Response(body, { status: 409 })
+							: json(body, 409);
 					res.headers.set("retry-after", "1");
 					return res;
 				}
@@ -44,12 +58,17 @@ export function idempotency(options: IdempotencyOptions = {}): Middleware {
 				}
 			}
 
-			await store.set(key, { status: "IN_PROGRESS", expiresAt: Date.now() + ttlMs });
+			await store.set(key, {
+				status: "IN_PROGRESS",
+				expiresAt: Date.now() + ttlMs,
+			});
 			(ctx.state as Record<string, unknown>)._idempotencyKey = key;
 		},
 
 		async after(ctx: Context, res: Response) {
-			const key = (ctx.state as Record<string, unknown>)._idempotencyKey as string | undefined;
+			const key = (ctx.state as Record<string, unknown>)._idempotencyKey as
+				| string
+				| undefined;
 			if (!key) return res;
 
 			try {

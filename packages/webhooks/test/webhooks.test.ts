@@ -17,18 +17,26 @@ describe("@barqel/barq-webhooks", () => {
 		const server = app.listen(0);
 
 		try {
-			const payload = JSON.stringify({ id: "evt_123", type: "payment_intent.succeeded" });
-			const timestamp = Math.floor(Date.now() / 1000);
-			const sig = createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex");
-
-			const res = await fetch(`http://localhost:${server.port}/webhooks/stripe`, {
-				method: "POST",
-				headers: {
-					"stripe-signature": `t=${timestamp},v1=${sig}`,
-					"content-type": "application/json",
-				},
-				body: payload,
+			const payload = JSON.stringify({
+				id: "evt_123",
+				type: "payment_intent.succeeded",
 			});
+			const timestamp = Math.floor(Date.now() / 1000);
+			const sig = createHmac("sha256", secret)
+				.update(`${timestamp}.${payload}`)
+				.digest("hex");
+
+			const res = await fetch(
+				`http://localhost:${server.port}/webhooks/stripe`,
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": `t=${timestamp},v1=${sig}`,
+						"content-type": "application/json",
+					},
+					body: payload,
+				},
+			);
 
 			expect(res.status).toBe(200);
 			const data = await res.json();
@@ -52,15 +60,20 @@ describe("@barqel/barq-webhooks", () => {
 		try {
 			const payload = JSON.stringify({ id: "evt_old" });
 			const timestamp = Math.floor(Date.now() / 1000) - 120;
-			const sig = createHmac("sha256", secret).update(`${timestamp}.${payload}`).digest("hex");
+			const sig = createHmac("sha256", secret)
+				.update(`${timestamp}.${payload}`)
+				.digest("hex");
 
-			const res = await fetch(`http://localhost:${server.port}/webhooks/stripe-old`, {
-				method: "POST",
-				headers: {
-					"stripe-signature": `t=${timestamp},v1=${sig}`,
+			const res = await fetch(
+				`http://localhost:${server.port}/webhooks/stripe-old`,
+				{
+					method: "POST",
+					headers: {
+						"stripe-signature": `t=${timestamp},v1=${sig}`,
+					},
+					body: payload,
 				},
-				body: payload,
-			});
+			);
 
 			expect(res.status).toBe(400);
 			const data = await res.json();
@@ -81,17 +94,23 @@ describe("@barqel/barq-webhooks", () => {
 		const server = app.listen(0);
 
 		try {
-			const payload = JSON.stringify({ action: "opened", repository: { name: "barq" } });
+			const payload = JSON.stringify({
+				action: "opened",
+				repository: { name: "barq" },
+			});
 			const sig = createHmac("sha256", secret).update(payload).digest("hex");
 
-			const res = await fetch(`http://localhost:${server.port}/webhooks/github`, {
-				method: "POST",
-				headers: {
-					"x-hub-signature-256": `sha256=${sig}`,
-					"content-type": "application/json",
+			const res = await fetch(
+				`http://localhost:${server.port}/webhooks/github`,
+				{
+					method: "POST",
+					headers: {
+						"x-hub-signature-256": `sha256=${sig}`,
+						"content-type": "application/json",
+					},
+					body: payload,
 				},
-				body: payload,
-			});
+			);
 
 			expect(res.status).toBe(200);
 			const data = await res.json();
@@ -113,16 +132,21 @@ describe("@barqel/barq-webhooks", () => {
 
 		try {
 			const payload = JSON.stringify({ order_id: 1001 });
-			const sig = createHmac("sha256", secret).update(payload, "utf8").digest("base64");
+			const sig = createHmac("sha256", secret)
+				.update(payload, "utf8")
+				.digest("base64");
 
-			const res = await fetch(`http://localhost:${server.port}/webhooks/shopify`, {
-				method: "POST",
-				headers: {
-					"x-shopify-hmac-sha256": sig,
-					"content-type": "application/json",
+			const res = await fetch(
+				`http://localhost:${server.port}/webhooks/shopify`,
+				{
+					method: "POST",
+					headers: {
+						"x-shopify-hmac-sha256": sig,
+						"content-type": "application/json",
+					},
+					body: payload,
 				},
-				body: payload,
-			});
+			);
 
 			expect(res.status).toBe(200);
 		} finally {
@@ -144,13 +168,16 @@ describe("@barqel/barq-webhooks", () => {
 			const payload = JSON.stringify({ amount: 100 });
 			const sig = createHmac("sha256", secret).update(payload).digest("hex");
 
-			const res = await fetch(`http://localhost:${server.port}/webhooks/verify`, {
-				method: "POST",
-				headers: {
-					"x-signature-256": sig,
+			const res = await fetch(
+				`http://localhost:${server.port}/webhooks/verify`,
+				{
+					method: "POST",
+					headers: {
+						"x-signature-256": sig,
+					},
+					body: JSON.stringify({ amount: 500 }),
 				},
-				body: JSON.stringify({ amount: 500 }),
-			});
+			);
 
 			expect(res.status).toBe(401);
 		} finally {

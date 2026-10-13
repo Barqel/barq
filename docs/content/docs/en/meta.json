@@ -1,10 +1,10 @@
 {
-  "pages": [
-    "index",
-    "introduction",
-    "getting-started",
-    "basics",
-    "runtime",
-    "api-reference"
-  ]
+	"pages": [
+		"index",
+		"introduction",
+		"getting-started",
+		"basics",
+		"runtime",
+		"api-reference"
+	]
 }

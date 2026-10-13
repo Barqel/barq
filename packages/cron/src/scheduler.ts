@@ -4,7 +4,11 @@ import type { CronJobInterface, CronJobOptions, CronTask } from "./types";
 export class CronScheduler {
 	private readonly jobs = new Map<string, CronJobInterface>();
 
-	add(pattern: string, task: CronTask, options: CronJobOptions = {}): CronJobInterface {
+	add(
+		pattern: string,
+		task: CronTask,
+		options: CronJobOptions = {},
+	): CronJobInterface {
 		const job = new CronJob(pattern, task, options);
 		if (this.jobs.has(job.name)) {
 			throw new Error(`Job with name "${job.name}" already exists`);
@@ -41,7 +45,13 @@ export class CronScheduler {
 		this.jobs.clear();
 	}
 
-	list(): Array<{ name: string; pattern: string; nextRun: Date | null; lastRun: Date | null; isRunning: boolean }> {
+	list(): Array<{
+		name: string;
+		pattern: string;
+		nextRun: Date | null;
+		lastRun: Date | null;
+		isRunning: boolean;
+	}> {
 		return Array.from(this.jobs.values()).map((job) => ({
 			name: job.name,
 			pattern: job.pattern,

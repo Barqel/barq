@@ -2,7 +2,10 @@ import { type Context, HttpError, type Middleware } from "@barqel/barq";
 import type { ZodType, z } from "zod";
 import type { MultiZodSchema, ValidationHook, ValidationTarget } from "./types";
 
-async function extractTargetData(ctx: Context, target: ValidationTarget): Promise<unknown> {
+async function extractTargetData(
+	ctx: Context,
+	target: ValidationTarget,
+): Promise<unknown> {
 	switch (target) {
 		case "body":
 		case "json": {
@@ -10,7 +13,10 @@ async function extractTargetData(ctx: Context, target: ValidationTarget): Promis
 			try {
 				return await ctx.json();
 			} catch {
-				throw new HttpError(400, { error: "Bad Request", message: "Malformed JSON payload" });
+				throw new HttpError(400, {
+					error: "Bad Request",
+					message: "Malformed JSON payload",
+				});
 			}
 		}
 		case "query": {
@@ -59,7 +65,8 @@ export function zValidator<TSchema extends ZodType<any, any, any>>(
 			}
 
 			const state = ctx.state as Record<string, unknown>;
-			const validMap = ((ctx.valid as Record<string, unknown>) ?? Object.create(null)) as Record<string, unknown>;
+			const validMap = ((ctx.valid as Record<string, unknown>) ??
+				Object.create(null)) as Record<string, unknown>;
 			const normalizedTarget = target === "json" ? "body" : target;
 
 			validMap[normalizedTarget] = result.data;
@@ -72,8 +79,11 @@ export function zValidator<TSchema extends ZodType<any, any, any>>(
 export function validateZod(schemas: MultiZodSchema): Middleware {
 	return {
 		async before(ctx: Context) {
-			const validMap = ((ctx.valid as Record<string, unknown>) ?? Object.create(null)) as Record<string, unknown>;
-			const entries = Object.entries(schemas) as Array<[ValidationTarget, ZodType<any, any, any>]>;
+			const validMap = ((ctx.valid as Record<string, unknown>) ??
+				Object.create(null)) as Record<string, unknown>;
+			const entries = Object.entries(schemas) as Array<
+				[ValidationTarget, ZodType<any, any, any>]
+			>;
 
 			for (const [target, schema] of entries) {
 				if (!schema) continue;

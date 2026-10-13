@@ -1,4 +1,9 @@
-import { type Context, type Handler, type HandlerResult, HttpError } from "@barqel/barq";
+import {
+	type Context,
+	type Handler,
+	type HandlerResult,
+	HttpError,
+} from "@barqel/barq";
 import { defaultNormalizeVersion, extractVersion } from "./extractor";
 import type { VersionMap, VersioningOptions } from "./types";
 
@@ -17,7 +22,9 @@ export function version<
 		normalizedMap.set(normalize(key), handlers[key]!);
 	}
 
-	const defaultVer = options.defaultVersion ? normalize(options.defaultVersion) : null;
+	const defaultVer = options.defaultVersion
+		? normalize(options.defaultVersion)
+		: null;
 
 	return async (ctx: Context<TParams, TState>): Promise<HandlerResult> => {
 		const state = ctx.state as Record<string, unknown>;
@@ -33,7 +40,11 @@ export function version<
 			}
 
 			if (options.onInvalidVersion) {
-				return options.onInvalidVersion(ctx as unknown as Context, requestedVersion, rawKeys);
+				return options.onInvalidVersion(
+					ctx as unknown as Context,
+					requestedVersion,
+					rawKeys,
+				);
 			}
 
 			throw new HttpError(400, {
@@ -50,7 +61,11 @@ export function version<
 		}
 
 		if (options.onInvalidVersion) {
-			return options.onInvalidVersion(ctx as unknown as Context, "none", rawKeys);
+			return options.onInvalidVersion(
+				ctx as unknown as Context,
+				"none",
+				rawKeys,
+			);
 		}
 
 		throw new HttpError(400, {

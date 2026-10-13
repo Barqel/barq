@@ -26,12 +26,16 @@ describe("@barqel/barq-static", () => {
 		const server = app.listen(0);
 
 		try {
-			const resCss = await fetch(`http://localhost:${server.port}/public/style.css`);
+			const resCss = await fetch(
+				`http://localhost:${server.port}/public/style.css`,
+			);
 			expect(resCss.status).toBe(200);
 			expect(resCss.headers.get("content-type")).toContain("text/css");
 			expect(await resCss.text()).toBe("body { color: red; }");
 
-			const resJson = await fetch(`http://localhost:${server.port}/public/data.json`);
+			const resJson = await fetch(
+				`http://localhost:${server.port}/public/data.json`,
+			);
 			expect(resJson.status).toBe(200);
 			expect(resJson.headers.get("content-type")).toContain("application/json");
 			expect(await resJson.json()).toEqual({ key: "val" });
@@ -61,7 +65,9 @@ describe("@barqel/barq-static", () => {
 		const server = app.listen(0);
 
 		try {
-			const res = await fetch(`http://localhost:${server.port}/public/../../package.json`);
+			const res = await fetch(
+				`http://localhost:${server.port}/public/../../package.json`,
+			);
 			expect(res.status).toBe(404);
 		} finally {
 			await app.stop();
@@ -87,13 +93,18 @@ describe("@barqel/barq-static", () => {
 		const server = app.listen(0);
 
 		try {
-			const res1 = await fetch(`http://localhost:${server.port}/public/style.css`);
+			const res1 = await fetch(
+				`http://localhost:${server.port}/public/style.css`,
+			);
 			const etag = res1.headers.get("etag");
 			expect(etag).toBeDefined();
 
-			const res2 = await fetch(`http://localhost:${server.port}/public/style.css`, {
-				headers: { "if-none-match": etag! },
-			});
+			const res2 = await fetch(
+				`http://localhost:${server.port}/public/style.css`,
+				{
+					headers: { "if-none-match": etag! },
+				},
+			);
 			expect(res2.status).toBe(304);
 		} finally {
 			await app.stop();
@@ -106,9 +117,12 @@ describe("@barqel/barq-static", () => {
 		const server = app.listen(0);
 
 		try {
-			const res = await fetch(`http://localhost:${server.port}/dashboard/user`, {
-				headers: { accept: "text/html,application/xhtml+xml" },
-			});
+			const res = await fetch(
+				`http://localhost:${server.port}/dashboard/user`,
+				{
+					headers: { accept: "text/html,application/xhtml+xml" },
+				},
+			);
 			expect(res.status).toBe(200);
 			expect(res.headers.get("content-type")).toContain("text/html");
 			expect(await res.text()).toBe("<h1>Index</h1>");
@@ -123,9 +137,12 @@ describe("@barqel/barq-static", () => {
 		const server = app.listen(0);
 
 		try {
-			const res = await fetch(`http://localhost:${server.port}/public/style.css`, {
-				headers: { range: "bytes=0-3" },
-			});
+			const res = await fetch(
+				`http://localhost:${server.port}/public/style.css`,
+				{
+					headers: { range: "bytes=0-3" },
+				},
+			);
 			expect(res.status).toBe(206);
 			expect(res.headers.get("content-range")).toContain("bytes 0-3/");
 			expect(await res.text()).toBe("body");

@@ -13,7 +13,8 @@ export function verifyWebhook(options: WebhookOptions): Middleware {
 
 			try {
 				const verified = await verifySignature(rawBody, ctx, options);
-				const state = ctx.state as Record<string, unknown> & WebhookPayloadState;
+				const state = ctx.state as Record<string, unknown> &
+					WebhookPayloadState;
 				state.webhookRaw = verified.raw;
 				state.webhookPayload = verified.payload;
 				state.webhookProvider = verified.provider;

@@ -32,7 +32,11 @@ describe("@barqel/barq-sse", () => {
 		app.get("/events", (ctx) => {
 			return sse(ctx, async (emitter) => {
 				emitter.send({ id: "evt_1", event: "ping", data: "hello" });
-				emitter.send({ id: "evt_2", event: "message", data: { text: "world" } });
+				emitter.send({
+					id: "evt_2",
+					event: "message",
+					data: { text: "world" },
+				});
 				emitter.close();
 			});
 		});

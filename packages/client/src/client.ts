@@ -19,7 +19,10 @@ export class BarqClient {
 			...options,
 		};
 
-		const cbOpts = options.circuitBreaker === false ? { enabled: false } : (options.circuitBreaker ?? {});
+		const cbOpts =
+			options.circuitBreaker === false
+				? { enabled: false }
+				: (options.circuitBreaker ?? {});
 		this.circuitBreaker = new CircuitBreaker(cbOpts);
 	}
 
@@ -35,7 +38,10 @@ export class BarqClient {
 		return this.request("PUT", path, options);
 	}
 
-	delete(path: string, options?: ClientRequestOptions): Promise<ClientResponse> {
+	delete(
+		path: string,
+		options?: ClientRequestOptions,
+	): Promise<ClientResponse> {
 		return this.request("DELETE", path, options);
 	}
 
@@ -69,7 +75,10 @@ export class BarqClient {
 			options.retry !== undefined ? options.retry : (this.options.retry ?? {});
 
 		const maxRetries = retryConfig === false ? 0 : (retryConfig.retries ?? 3);
-		const retryPredicate = retryConfig === false ? () => false : (retryConfig.retryOn ?? defaultRetryOn);
+		const retryPredicate =
+			retryConfig === false
+				? () => false
+				: (retryConfig.retryOn ?? defaultRetryOn);
 
 		let lastError: unknown;
 		let lastResponse: Response | undefined;
@@ -126,7 +135,11 @@ export class BarqClient {
 		throw lastError;
 	}
 
-	private buildRequest(method: string, path: string, options: ClientRequestOptions): Request {
+	private buildRequest(
+		method: string,
+		path: string,
+		options: ClientRequestOptions,
+	): Request {
 		const url = this.buildUrl(path, options.query);
 		const headers = new Headers(this.options.headers);
 
@@ -158,7 +171,9 @@ export class BarqClient {
 		}
 
 		const timeout = options.timeoutMs ?? this.options.timeoutMs ?? 10_000;
-		const signal = options.signal ?? (timeout > 0 ? AbortSignal.timeout(timeout) : undefined);
+		const signal =
+			options.signal ??
+			(timeout > 0 ? AbortSignal.timeout(timeout) : undefined);
 
 		const reqInit: RequestInit = {
 			method: method.toUpperCase(),

@@ -1,6 +1,8 @@
 import type { ParsedSetCookie } from "./types";
 
-export function parseSetCookieHeaders(headers: Headers): Map<string, ParsedSetCookie> {
+export function parseSetCookieHeaders(
+	headers: Headers,
+): Map<string, ParsedSetCookie> {
 	const map = new Map<string, ParsedSetCookie>();
 	const rawCookies: string[] = [];
 

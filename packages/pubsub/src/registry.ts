@@ -10,7 +10,7 @@ export class PubSubRegistry<TData = unknown> implements PubSubInterface<TData> {
 		if (typeof ws.subscribe === "function") {
 			ws.subscribe(room);
 		}
-		
+
 		let roomSockets = this.rooms.get(room);
 		if (!roomSockets) {
 			roomSockets = new Set();
@@ -31,13 +31,13 @@ export class PubSubRegistry<TData = unknown> implements PubSubInterface<TData> {
 		if (typeof ws.unsubscribe === "function") {
 			ws.unsubscribe(room);
 		}
-		
+
 		const roomSockets = this.rooms.get(room);
 		if (roomSockets) {
 			roomSockets.delete(ws);
 			if (roomSockets.size === 0) this.rooms.delete(room);
 		}
-		
+
 		const sRooms = this.socketRooms.get(ws);
 		if (sRooms) {
 			sRooms.delete(room);
@@ -63,7 +63,11 @@ export class PubSubRegistry<TData = unknown> implements PubSubInterface<TData> {
 		this.allSockets.delete(ws);
 	}
 
-	publish(room: string, message: string | Buffer | Uint8Array, compress?: boolean): void {
+	publish(
+		room: string,
+		message: string | Buffer | Uint8Array,
+		compress?: boolean,
+	): void {
 		const roomSockets = this.rooms.get(room);
 		if (!roomSockets || roomSockets.size === 0) return;
 
@@ -80,7 +84,10 @@ export class PubSubRegistry<TData = unknown> implements PubSubInterface<TData> {
 		}
 	}
 
-	publishToAll(message: string | Buffer | Uint8Array, compress?: boolean): void {
+	publishToAll(
+		message: string | Buffer | Uint8Array,
+		compress?: boolean,
+	): void {
 		for (const ws of this.allSockets) {
 			if (ws.readyState === 1) {
 				ws.send(message, compress);

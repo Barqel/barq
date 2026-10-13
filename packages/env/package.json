@@ -1,26 +1,37 @@
 {
-  "name": "@barqel/barq-env",
-  "version": "1.0.0",
-  "description": "Zero-dependency, type-safe environment variable schema validation and configuration for Barq",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "bun build src/index.ts --external @barqel/barq --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
-    "test": "bun test"
-  },
-  "peerDependencies": {
-    "@barqel/barq": ">=1.0.0"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.2.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
-  }
+	"name": "@barqel/barq-env",
+	"version": "1.0.0",
+	"description": "Zero-dependency, type-safe environment variable parser and .env loader for Barq",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check .",
+		"build": "rm -rf dist && bun build src/index.ts --external @barqel/barq --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
+		"test": "bun test",
+		"prepublishOnly": "bun run check && bun test && bun run build"
+	},
+	"files": [
+		"dist"
+	],
+	"peerDependencies": {
+		"@barqel/barq": ">=1.0.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.15",
+		"@types/bun": "^1.2.0",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.0.0"
+	}
 }

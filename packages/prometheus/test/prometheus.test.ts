@@ -7,7 +7,8 @@ describe("@barqel/barq-prometheus", () => {
 		const app = new App();
 		app.plugin(
 			prometheusPlugin({
-				normalizePath: (path) => (path.startsWith("/users/") ? "/users/:id" : path),
+				normalizePath: (path) =>
+					path.startsWith("/users/") ? "/users/:id" : path,
 			}),
 		);
 
@@ -30,13 +31,23 @@ describe("@barqel/barq-prometheus", () => {
 			const text = await res.text();
 
 			// Counter checks
-			expect(text).toContain('http_requests_total{method="GET",path="/ping",status="200"} 2');
-			expect(text).toContain('http_requests_total{method="GET",path="/users/:id",status="200"} 1');
-			expect(text).toContain('http_requests_total{method="POST",path="/errors",status="500"} 1');
+			expect(text).toContain(
+				'http_requests_total{method="GET",path="/ping",status="200"} 2',
+			);
+			expect(text).toContain(
+				'http_requests_total{method="GET",path="/users/:id",status="200"} 1',
+			);
+			expect(text).toContain(
+				'http_requests_total{method="POST",path="/errors",status="500"} 1',
+			);
 
 			// Histogram checks
-			expect(text).toContain('http_request_duration_seconds_count{method="GET",path="/ping",status="200"} 2');
-			expect(text).toContain('http_request_duration_seconds_sum{method="GET",path="/ping",status="200"}');
+			expect(text).toContain(
+				'http_request_duration_seconds_count{method="GET",path="/ping",status="200"} 2',
+			);
+			expect(text).toContain(
+				'http_request_duration_seconds_sum{method="GET",path="/ping",status="200"}',
+			);
 
 			// Default metrics checks
 			expect(text).toContain("process_resident_memory_bytes");
@@ -66,7 +77,9 @@ describe("@barqel/barq-prometheus", () => {
 			const res = await fetch(`http://localhost:${server.port}/metrics`);
 			const text = await res.text();
 
-			expect(text).toContain('http_requests_total{method="GET",path="/tracked",status="200"} 1');
+			expect(text).toContain(
+				'http_requests_total{method="GET",path="/tracked",status="200"} 1',
+			);
 			expect(text).not.toContain('path="/skip"');
 		} finally {
 			await app.stop();

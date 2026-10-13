@@ -162,11 +162,11 @@ describe("analyzeHandler", () => {
 		expect(analyzeHandler(minified).literal).toBeNull();
 	});
 
-	it("handles minified !0 (false) and !1 (true) in JSON objects", async () => {
+	it("handles minified !0 (true) and !1 (false) in JSON objects", async () => {
 		const minified = await minifyHandler(() => ({ t: !1, f: !0, a: 1 }));
 		const r = analyzeHandler(minified);
 		expect(r.literal).not.toBeNull();
-		expect(JSON.parse(r.literal!.value)).toEqual({ t: true, f: false, a: 1 });
+		expect(JSON.parse(r.literal!.value)).toEqual({ t: false, f: true, a: 1 });
 	});
 
 	it("extracts JSON literal from function expression body", () => {

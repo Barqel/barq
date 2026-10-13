@@ -38,7 +38,10 @@ describe("@barqel/barq-openapi", () => {
 				},
 			},
 			(ctx) => {
-				const valid = ctx.valid as { body: { name: string }; params: { id: string } };
+				const valid = ctx.valid as {
+					body: { name: string };
+					params: { id: string };
+				};
 				return json({ id: valid.params.id, name: valid.body.name }, 201);
 			},
 		);
@@ -46,7 +49,9 @@ describe("@barqel/barq-openapi", () => {
 		const server = app.listen(0);
 
 		try {
-			const specRes = await fetch(`http://localhost:${server.port}/openapi.json`);
+			const specRes = await fetch(
+				`http://localhost:${server.port}/openapi.json`,
+			);
 			expect(specRes.status).toBe(200);
 			const spec = await specRes.json();
 			expect(spec.openapi).toBe("3.1.0");
@@ -97,7 +102,9 @@ describe("@barqel/barq-openapi", () => {
 		const server = app.listen(0);
 
 		try {
-			const specRes = await fetch(`http://localhost:${server.port}/openapi.json`);
+			const specRes = await fetch(
+				`http://localhost:${server.port}/openapi.json`,
+			);
 			const spec = await specRes.json();
 			expect(spec.paths["/api/v1/items"]).toBeDefined();
 			expect(spec.paths["/api/v1/items"].get.tags).toEqual(["Items"]);

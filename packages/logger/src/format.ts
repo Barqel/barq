@@ -62,7 +62,10 @@ function colorizeLevel(level: LogLevel): string {
 }
 
 export function formatPretty(record: LogRecord): string {
-	const parts: string[] = [`${GRAY}${record.time}${RESET}`, colorizeLevel(record.level)];
+	const parts: string[] = [
+		`${GRAY}${record.time}${RESET}`,
+		colorizeLevel(record.level),
+	];
 
 	if (record.requestId) {
 		parts.push(`${GRAY}(${record.requestId})${RESET}`);
@@ -87,7 +90,10 @@ export function formatPretty(record: LogRecord): string {
 	}
 
 	if (record.error) {
-		const errStr = record.error instanceof Error ? (record.error.stack ?? record.error.message) : String(record.error);
+		const errStr =
+			record.error instanceof Error
+				? (record.error.stack ?? record.error.message)
+				: String(record.error);
 		parts.push(`\n${RED}${errStr}${RESET}`);
 	}
 

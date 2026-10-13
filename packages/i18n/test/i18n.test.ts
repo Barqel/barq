@@ -48,7 +48,9 @@ describe("@barqel/barq-i18n", () => {
 				error: "Resource not found",
 			});
 
-			const resAr = await fetch(`http://localhost:${server.port}/greeting?lang=ar`);
+			const resAr = await fetch(
+				`http://localhost:${server.port}/greeting?lang=ar`,
+			);
 			expect(resAr.headers.get("content-language")).toBe("ar");
 			expect(await resAr.json()).toEqual({
 				message: "مرحباً، Ada!",

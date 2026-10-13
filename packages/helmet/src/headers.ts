@@ -45,7 +45,9 @@ function buildCspHeader(directives: CspDirectives): string {
 	return parts.join("; ");
 }
 
-export function buildHelmetHeaders(options: HelmetOptions = {}): Record<string, string> {
+export function buildHelmetHeaders(
+	options: HelmetOptions = {},
+): Record<string, string> {
 	const headers: Record<string, string> = {};
 
 	if (options.xContentTypeOptions !== false) {
@@ -53,12 +55,18 @@ export function buildHelmetHeaders(options: HelmetOptions = {}): Record<string, 
 	}
 
 	if (options.xFrameOptions !== false) {
-		const action = typeof options.xFrameOptions === "string" ? options.xFrameOptions : "SAMEORIGIN";
+		const action =
+			typeof options.xFrameOptions === "string"
+				? options.xFrameOptions
+				: "SAMEORIGIN";
 		headers["x-frame-options"] = action;
 	}
 
 	if (options.strictTransportSecurity !== false) {
-		const opts = typeof options.strictTransportSecurity === "object" ? options.strictTransportSecurity : {};
+		const opts =
+			typeof options.strictTransportSecurity === "object"
+				? options.strictTransportSecurity
+				: {};
 		const maxAge = opts.maxAge ?? 31536000;
 		let val = `max-age=${maxAge}`;
 		if (opts.includeSubDomains !== false) val += "; includeSubDomains";
@@ -71,12 +79,18 @@ export function buildHelmetHeaders(options: HelmetOptions = {}): Record<string, 
 	}
 
 	if (options.xPermittedCrossDomainPolicies !== false) {
-		const policy = typeof options.xPermittedCrossDomainPolicies === "string" ? options.xPermittedCrossDomainPolicies : "none";
+		const policy =
+			typeof options.xPermittedCrossDomainPolicies === "string"
+				? options.xPermittedCrossDomainPolicies
+				: "none";
 		headers["x-permitted-cross-domain-policies"] = policy;
 	}
 
 	if (options.xDnsPrefetchControl !== false) {
-		const control = typeof options.xDnsPrefetchControl === "string" ? options.xDnsPrefetchControl : "off";
+		const control =
+			typeof options.xDnsPrefetchControl === "string"
+				? options.xDnsPrefetchControl
+				: "off";
 		headers["x-dns-prefetch-control"] = control;
 	}
 
@@ -89,17 +103,26 @@ export function buildHelmetHeaders(options: HelmetOptions = {}): Record<string, 
 	}
 
 	if (options.crossOriginEmbedderPolicy) {
-		const policy = typeof options.crossOriginEmbedderPolicy === "string" ? options.crossOriginEmbedderPolicy : "require-corp";
+		const policy =
+			typeof options.crossOriginEmbedderPolicy === "string"
+				? options.crossOriginEmbedderPolicy
+				: "require-corp";
 		headers["cross-origin-embedder-policy"] = policy;
 	}
 
 	if (options.crossOriginOpenerPolicy !== false) {
-		const policy = typeof options.crossOriginOpenerPolicy === "string" ? options.crossOriginOpenerPolicy : "same-origin";
+		const policy =
+			typeof options.crossOriginOpenerPolicy === "string"
+				? options.crossOriginOpenerPolicy
+				: "same-origin";
 		headers["cross-origin-opener-policy"] = policy;
 	}
 
 	if (options.crossOriginResourcePolicy !== false) {
-		const policy = typeof options.crossOriginResourcePolicy === "string" ? options.crossOriginResourcePolicy : "same-origin";
+		const policy =
+			typeof options.crossOriginResourcePolicy === "string"
+				? options.crossOriginResourcePolicy
+				: "same-origin";
 		headers["cross-origin-resource-policy"] = policy;
 	}
 
@@ -113,10 +136,20 @@ export function buildHelmetHeaders(options: HelmetOptions = {}): Record<string, 
 		headers["referrer-policy"] = policy;
 	}
 
-	if (options.contentSecurityPolicy !== false && options.contentSecurityPolicy !== undefined) {
-		const cspOpts = typeof options.contentSecurityPolicy === "object" ? options.contentSecurityPolicy : {};
-		const directives = cspOpts.directives ? { ...DEFAULT_CSP_DIRECTIVES, ...cspOpts.directives } : DEFAULT_CSP_DIRECTIVES;
-		const headerName = cspOpts.reportOnly ? "content-security-policy-report-only" : "content-security-policy";
+	if (
+		options.contentSecurityPolicy !== false &&
+		options.contentSecurityPolicy !== undefined
+	) {
+		const cspOpts =
+			typeof options.contentSecurityPolicy === "object"
+				? options.contentSecurityPolicy
+				: {};
+		const directives = cspOpts.directives
+			? { ...DEFAULT_CSP_DIRECTIVES, ...cspOpts.directives }
+			: DEFAULT_CSP_DIRECTIVES;
+		const headerName = cspOpts.reportOnly
+			? "content-security-policy-report-only"
+			: "content-security-policy";
 		headers[headerName] = buildCspHeader(directives);
 	}
 

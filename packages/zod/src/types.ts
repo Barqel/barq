@@ -4,7 +4,9 @@ import type { ZodSchema, ZodType, z } from "zod";
 export type ValidationTarget = "body" | "json" | "query" | "params" | "headers";
 
 export type ValidationHook<TOutput> = (
-	result: { success: true; data: TOutput } | { success: false; error: z.ZodError },
+	result:
+		| { success: true; data: TOutput }
+		| { success: false; error: z.ZodError },
 	ctx: Context,
 ) => Response | void | Promise<Response | void>;
 

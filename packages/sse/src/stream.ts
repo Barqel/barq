@@ -28,7 +28,11 @@ export function createSseResponse(
 					let msg: SseMessage;
 					if (arg2 !== undefined) {
 						msg = { ...arg2, data: arg1 };
-					} else if (typeof arg1 === "object" && arg1 !== null && ("data" in arg1 || "comment" in arg1 || "event" in arg1)) {
+					} else if (
+						typeof arg1 === "object" &&
+						arg1 !== null &&
+						("data" in arg1 || "comment" in arg1 || "event" in arg1)
+					) {
 						msg = arg1 as SseMessage;
 					} else {
 						msg = { data: arg1 };

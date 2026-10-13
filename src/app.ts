@@ -1388,16 +1388,26 @@ export class App<TState extends object = Record<string, unknown>> {
 									return Response.json(res);
 								if (typeof res === "string")
 									return new Response(res, { headers: FAST_TEXT_HEADERS });
-								return Response.json(res);
+								return finalizeValue(res as HandlerResult);
 							};
 							if (nr.method === "GET" && !isDyn) {
 								methodMap.HEAD = () => {
 									const res = raw();
-									const r =
+									if (isThenable(res))
+										return Promise.resolve(res).then(
+											(r) =>
+												stripBody(
+													r instanceof Response
+														? r
+														: finalizeValue(r as HandlerResult),
+												),
+											(err: unknown) => errorToResponse(err, this.development),
+										);
+									return stripBody(
 										res instanceof Response
 											? res
-											: finalizeValue(res as HandlerResult);
-									return stripBody(r);
+											: finalizeValue(res as HandlerResult),
+									);
 								};
 							}
 						}
@@ -1424,13 +1434,22 @@ export class App<TState extends object = Record<string, unknown>> {
 										}
 									).params ?? EMPTY_PARAMS;
 								const syncRes = raw({ params } as never);
+								if (syncRes instanceof Response) return syncRes;
 								if (isThenable(syncRes)) {
-									return Promise.resolve(syncRes).then((val) =>
-										val instanceof Response
-											? val
-											: typeof val === "object" && val !== null
-												? Response.json(val)
-												: new Response(String(val)),
+									return Promise.resolve(syncRes).then(
+										(val) => {
+											if (val instanceof Response) return val;
+											if (typeof val === "object" && val !== null)
+												return new Response(JSON.stringify(val), {
+													headers: FAST_JSON_HEADERS,
+												});
+											if (typeof val === "string")
+												return new Response(val, {
+													headers: FAST_TEXT_HEADERS,
+												});
+											return finalizeValue(val as HandlerResult);
+										},
+										(err: unknown) => errorToResponse(err, this.development),
 									);
 								}
 								return new Response(serializer(params), responseInit);
@@ -1443,12 +1462,7 @@ export class App<TState extends object = Record<string, unknown>> {
 								const res = raw(
 									(p ? req : { params: EMPTY_PARAMS, req }) as never,
 								);
-								if (typeof res === "object" && res !== null) {
-									if (res instanceof Response) return res;
-									return Response.json(res);
-								}
-								if (typeof res === "string")
-									return new Response(res, { headers: FAST_TEXT_HEADERS });
+								if (res instanceof Response) return res;
 								if (isThenable(res)) {
 									return Promise.resolve(res).then((r) => {
 										if (r instanceof Response) return r;
@@ -1461,6 +1475,10 @@ export class App<TState extends object = Record<string, unknown>> {
 										return finalizeValue(r as HandlerResult);
 									});
 								}
+								if (typeof res === "object" && res !== null)
+									return Response.json(res);
+								if (typeof res === "string")
+									return new Response(res, { headers: FAST_TEXT_HEADERS });
 								return new Response(JSON.stringify(res), {
 									headers: FAST_JSON_HEADERS,
 								});
@@ -1483,40 +1501,39 @@ export class App<TState extends object = Record<string, unknown>> {
 								releaseLightContext(ctx);
 								return errorToResponse(err, this.development);
 							}
-							if (typeof res === "object" && res !== null) {
-								if (res instanceof Response) {
-									releaseLightContext(ctx);
-									return res;
-								}
-								if (!isThenable(res)) {
-									releaseLightContext(ctx);
-									return Response.json(res);
-								}
-							} else if (typeof res === "string") {
+							if (res instanceof Response) {
 								releaseLightContext(ctx);
-								return new Response(res, { headers: FAST_TEXT_HEADERS });
-							} else if (!isThenable(res)) {
-								releaseLightContext(ctx);
-								return new Response(JSON.stringify(res), {
-									headers: FAST_JSON_HEADERS,
-								});
+								return res;
 							}
-							return Promise.resolve(res)
-								.then((r) => {
-									releaseLightContext(ctx);
-									if (r instanceof Response) return r;
-									if (typeof r === "object" && r !== null)
-										return new Response(JSON.stringify(r), {
-											headers: FAST_JSON_HEADERS,
-										});
-									if (typeof r === "string")
-										return new Response(r, { headers: FAST_TEXT_HEADERS });
-									return finalizeValue(r as HandlerResult);
-								})
-								.catch((err) => {
-									releaseLightContext(ctx);
-									return errorToResponse(err, this.development);
-								});
+							if (isThenable(res)) {
+								return Promise.resolve(res)
+									.then(
+										(r) => {
+											releaseLightContext(ctx);
+											if (r instanceof Response) return r;
+											if (typeof r === "object" && r !== null)
+												return new Response(JSON.stringify(r), {
+													headers: FAST_JSON_HEADERS,
+												});
+											if (typeof r === "string")
+												return new Response(r, { headers: FAST_TEXT_HEADERS });
+											return finalizeValue(r as HandlerResult);
+										},
+										(err: unknown) => {
+											releaseLightContext(ctx);
+											return errorToResponse(err, this.development);
+										},
+									)
+									.catch((err: unknown) =>
+										errorToResponse(err, this.development),
+									);
+							}
+							releaseLightContext(ctx);
+							if (typeof res === "object" && res !== null)
+								return Response.json(res);
+							if (typeof res === "string")
+								return new Response(res, { headers: FAST_TEXT_HEADERS });
+							return finalizeValue(res as HandlerResult);
 						};
 						if (nr.method === "GET" && !isDyn)
 							methodMap.HEAD = () =>

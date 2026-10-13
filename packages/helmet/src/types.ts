@@ -32,9 +32,21 @@ export interface ContentSecurityPolicyOptions {
 
 export interface HelmetOptions {
 	contentSecurityPolicy?: boolean | ContentSecurityPolicyOptions;
-	crossOriginEmbedderPolicy?: boolean | "require-corp" | "credentialless" | "unsafe-none";
-	crossOriginOpenerPolicy?: boolean | "same-origin" | "same-origin-allow-popups" | "unsafe-none";
-	crossOriginResourcePolicy?: boolean | "same-origin" | "same-site" | "cross-origin";
+	crossOriginEmbedderPolicy?:
+		| boolean
+		| "require-corp"
+		| "credentialless"
+		| "unsafe-none";
+	crossOriginOpenerPolicy?:
+		| boolean
+		| "same-origin"
+		| "same-origin-allow-popups"
+		| "unsafe-none";
+	crossOriginResourcePolicy?:
+		| boolean
+		| "same-origin"
+		| "same-site"
+		| "cross-origin";
 	originAgentCluster?: boolean;
 	referrerPolicy?: boolean | string | string[];
 	strictTransportSecurity?: boolean | StrictTransportSecurityOptions;
@@ -42,7 +54,12 @@ export interface HelmetOptions {
 	xDnsPrefetchControl?: boolean | "on" | "off";
 	xDownloadOptions?: boolean;
 	xFrameOptions?: boolean | "DENY" | "SAMEORIGIN";
-	xPermittedCrossDomainPolicies?: boolean | "none" | "master-only" | "by-content-type" | "all";
+	xPermittedCrossDomainPolicies?:
+		| boolean
+		| "none"
+		| "master-only"
+		| "by-content-type"
+		| "all";
 	xPoweredBy?: boolean;
 	xXssProtection?: boolean;
 }

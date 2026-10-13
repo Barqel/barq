@@ -44,7 +44,9 @@ export function negotiateLocale(
 
 		const baseCode = candidate.locale.split("-")[0];
 		if (baseCode) {
-			const baseIdx = normalizedSupported.findIndex((l) => l.startsWith(baseCode));
+			const baseIdx = normalizedSupported.findIndex((l) =>
+				l.startsWith(baseCode),
+			);
 			if (baseIdx !== -1) {
 				return supportedLocales[baseIdx]!;
 			}

@@ -24,8 +24,8 @@ describe("@barqel/barq-cache", () => {
 			const res2 = await fetch(`http://localhost:${server.port}/data`);
 			expect(res2.status).toBe(200);
 			expect(res2.headers.get("x-cache")).toBe("HIT");
-			expect(await res2.json()).toEqual({ count: 1 }); 
-			
+			expect(await res2.json()).toEqual({ count: 1 });
+
 			expect(callCount).toBe(1);
 		} finally {
 			await app.stop();
@@ -50,7 +50,7 @@ describe("@barqel/barq-cache", () => {
 			});
 			expect(res2.status).toBe(304);
 			expect(res2.headers.get("etag")).toBe(etag);
-			expect(await res2.text()).toBe(""); 
+			expect(await res2.text()).toBe("");
 		} finally {
 			await app.stop();
 		}
@@ -80,7 +80,7 @@ describe("@barqel/barq-cache", () => {
 			const res2 = await fetch(`http://localhost:${server.port}/skip`, {
 				headers: { "x-no-cache": "true" },
 			});
-			expect(res2.headers.get("x-cache")).toBeNull(); 
+			expect(res2.headers.get("x-cache")).toBeNull();
 			const data = await res2.json();
 			expect(data.count).toBe(2);
 		} finally {

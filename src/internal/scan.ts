@@ -848,7 +848,7 @@ function extractFlatObject(
 			tokens[i + 1]?.type === "num"
 		) {
 			const n = tokens[i + 1]!.value;
-			obj[key!] = n === "1";
+			obj[key!] = !Number(n);
 			i += 2;
 		} else if (
 			t.type === "punct" &&
@@ -1003,7 +1003,7 @@ function extractParamObject(
 			parts.push({
 				key: key!,
 				isParam: false,
-				literalValue: tokens[i + 1]!.value === "1" ? "true" : "false",
+				literalValue: tokens[i + 1]!.value === "0" ? "true" : "false",
 			});
 			i += 2;
 		} else if (

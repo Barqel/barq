@@ -20,8 +20,12 @@ describe("@barqel/barq-helmet", () => {
 			expect(res.headers.get("x-xss-protection")).toBe("0");
 			expect(res.headers.get("referrer-policy")).toBe("no-referrer");
 			expect(res.headers.get("cross-origin-opener-policy")).toBe("same-origin");
-			expect(res.headers.get("cross-origin-resource-policy")).toBe("same-origin");
-			expect(res.headers.get("strict-transport-security")).toContain("max-age=31536000");
+			expect(res.headers.get("cross-origin-resource-policy")).toBe(
+				"same-origin",
+			);
+			expect(res.headers.get("strict-transport-security")).toContain(
+				"max-age=31536000",
+			);
 			expect(res.headers.get("origin-agent-cluster")).toBe("?1");
 		} finally {
 			await app.stop();

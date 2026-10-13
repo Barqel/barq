@@ -5,7 +5,9 @@ import { testClient } from "../src/index";
 describe("@barqel/barq-testing", () => {
 	it("executes GET requests in-memory without starting a network port", async () => {
 		const app = new App();
-		app.get("/users/:id", (ctx) => json({ id: ctx.params.id, name: "Ada Lovelace" }));
+		app.get("/users/:id", (ctx) =>
+			json({ id: ctx.params.id, name: "Ada Lovelace" }),
+		);
 
 		const client = testClient(app);
 		const res = await client.get("/users/42");

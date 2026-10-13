@@ -32,7 +32,11 @@ export function i18nMiddleware(options: I18nOptions): Middleware {
 
 			if (!locale) {
 				const acceptHeader = ctx.req.headers.get(headerName);
-				locale = negotiateLocale(acceptHeader, options.locales, options.defaultLocale);
+				locale = negotiateLocale(
+					acceptHeader,
+					options.locales,
+					options.defaultLocale,
+				);
 			}
 
 			const t: TranslateFunction = createTranslator(
@@ -48,7 +52,9 @@ export function i18nMiddleware(options: I18nOptions): Middleware {
 		},
 
 		after(ctx: Context, res: Response) {
-			const locale = (ctx.state as Record<string, unknown>).locale as string | undefined;
+			const locale = (ctx.state as Record<string, unknown>).locale as
+				| string
+				| undefined;
 			if (locale && !res.headers.has("content-language")) {
 				const headers = new Headers(res.headers);
 				headers.set("content-language", locale);

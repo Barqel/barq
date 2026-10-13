@@ -85,7 +85,11 @@ export class Histogram implements Metric {
 		const key = toLabelString(labels);
 		let data = this.values.get(key);
 		if (!data) {
-			data = { count: 0, sum: 0, buckets: new Array(this.buckets.length + 1).fill(0) };
+			data = {
+				count: 0,
+				sum: 0,
+				buckets: new Array(this.buckets.length + 1).fill(0),
+			};
 			this.values.set(key, data);
 		}
 

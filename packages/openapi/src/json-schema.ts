@@ -33,7 +33,13 @@ export function toJsonSchema(input: unknown): Record<string, unknown> {
 	}
 
 	const record = input as Record<string, unknown>;
-	if (record.type || record.properties || record.items || record.anyOf || record.oneOf) {
+	if (
+		record.type ||
+		record.properties ||
+		record.items ||
+		record.anyOf ||
+		record.oneOf
+	) {
 		return record;
 	}
 
@@ -74,14 +80,18 @@ function parseZodDef(def: ZodLikeDef): Record<string, unknown> {
 			return out;
 		case "ZodObject": {
 			out.type = "object";
-			const shape = typeof def.shape === "function" ? def.shape() : (def.shape ?? {});
+			const shape =
+				typeof def.shape === "function" ? def.shape() : (def.shape ?? {});
 			const properties: Record<string, unknown> = {};
 			const required: string[] = [];
 
 			for (const [key, val] of Object.entries(shape)) {
 				properties[key] = toJsonSchema(val);
 				const subDef = (val as ZodLikeSchema)?._def;
-				if (subDef?.typeName !== "ZodOptional" && subDef?.typeName !== "ZodDefault") {
+				if (
+					subDef?.typeName !== "ZodOptional" &&
+					subDef?.typeName !== "ZodDefault"
+				) {
 					required.push(key);
 				}
 			}

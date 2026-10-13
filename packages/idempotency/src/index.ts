@@ -8,9 +8,7 @@ export * from "./middleware";
 
 export function idempotencyPlugin(options: IdempotencyOptions = {}) {
 	const mw = idempotency(options);
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		app.use(mw);
 	};
 }

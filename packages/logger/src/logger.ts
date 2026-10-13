@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { formatJson, formatPretty, shouldLog } from "./format";
-import type { LogLevel, LogRecord, LoggerOptions, RequestLogger } from "./types";
+import type {
+	LogLevel,
+	LogRecord,
+	LoggerOptions,
+	RequestLogger,
+} from "./types";
 
 export class Logger {
 	readonly level: LogLevel;
@@ -11,7 +16,12 @@ export class Logger {
 		this.level = options.level ?? "info";
 
 		if (options.mode) {
-			this.mode = options.mode === "auto" ? (process.env.NODE_ENV === "production" ? "json" : "pretty") : options.mode;
+			this.mode =
+				options.mode === "auto"
+					? process.env.NODE_ENV === "production"
+						? "json"
+						: "pretty"
+					: options.mode;
 		} else {
 			this.mode = process.env.NODE_ENV === "production" ? "json" : "pretty";
 		}
@@ -22,7 +32,8 @@ export class Logger {
 	log(record: LogRecord): void {
 		if (!shouldLog(this.level, record.level)) return;
 
-		const formatted = this.mode === "json" ? formatJson(record) : formatPretty(record);
+		const formatted =
+			this.mode === "json" ? formatJson(record) : formatPretty(record);
 
 		if (this.outputFn) {
 			this.outputFn(record, formatted);
@@ -39,7 +50,12 @@ export class Logger {
 	}
 
 	createRequestLogger(requestId: string): RequestLogger {
-		const emit = (level: LogLevel, message: string, data?: Record<string, unknown>, error?: unknown) => {
+		const emit = (
+			level: LogLevel,
+			message: string,
+			data?: Record<string, unknown>,
+			error?: unknown,
+		) => {
 			this.log({
 				level,
 				time: new Date().toISOString(),

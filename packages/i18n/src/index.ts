@@ -9,9 +9,7 @@ export * from "./middleware";
 
 export function i18nPlugin(options: I18nOptions) {
 	const mw = i18nMiddleware(options);
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		app.use(mw);
 	};
 }

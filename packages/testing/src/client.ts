@@ -1,14 +1,20 @@
 import type { App } from "@barqel/barq";
 import { parseSetCookieHeaders } from "./cookies";
-import type { ParsedSetCookie, QueryParams, TestClientOptions, TestRequestOptions, TestResponse } from "./types";
+import type {
+	ParsedSetCookie,
+	QueryParams,
+	TestClientOptions,
+	TestRequestOptions,
+	TestResponse,
+} from "./types";
 
 export class TestClient {
 	private readonly app: App<any>;
-	private readonly options: TestClientOptions;
+	private readonly clientOptions: TestClientOptions;
 
 	constructor(app: App<any>, options: TestClientOptions = {}) {
 		this.app = app;
-		this.options = {
+		this.clientOptions = {
 			baseUrl: "http://localhost",
 			defaultIp: "127.0.0.1",
 			...options,
@@ -43,9 +49,13 @@ export class TestClient {
 		return this.request("OPTIONS", path, options);
 	}
 
-	async request(method: string, path: string, options: TestRequestOptions = {}): Promise<TestResponse> {
+	async request(
+		method: string,
+		path: string,
+		options: TestRequestOptions = {},
+	): Promise<TestResponse> {
 		const url = this.buildUrl(path, options.query);
-		const headers = new Headers(this.options.defaultHeaders);
+		const headers = new Headers(this.clientOptions.defaultHeaders);
 
 		if (options.headers) {
 			if (options.headers instanceof Headers) {
@@ -83,7 +93,7 @@ export class TestClient {
 		}
 
 		const request = new Request(url, reqInit);
-		const ipAddress = options.ip ?? this.options.defaultIp ?? "127.0.0.1";
+		const ipAddress = options.ip ?? this.clientOptions.defaultIp ?? "127.0.0.1";
 
 		const serverShim: any = {
 			port: 0,
@@ -101,10 +111,11 @@ export class TestClient {
 	}
 
 	private buildUrl(path: string, query?: QueryParams): string {
-		const base = this.options.baseUrl ?? "http://localhost";
-		const full = path.startsWith("http://") || path.startsWith("https://")
-			? path
-			: `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+		const base = this.clientOptions.baseUrl ?? "http://localhost";
+		const full =
+			path.startsWith("http://") || path.startsWith("https://")
+				? path
+				: `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
 
 		const url = new URL(full);
 

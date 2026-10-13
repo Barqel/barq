@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { App, json } from "@barqel/barq";
-import { MemoryIdempotencyStore, idempotency, idempotencyPlugin } from "../src/index";
+import {
+	MemoryIdempotencyStore,
+	idempotency,
+	idempotencyPlugin,
+} from "../src/index";
 
 describe("@barqel/barq-idempotency", () => {
 	it("processes and caches response for a new idempotency key", async () => {
@@ -79,12 +83,16 @@ describe("@barqel/barq-idempotency", () => {
 
 	it("enforces header presence when enforceHeader is true", async () => {
 		const app = new App();
-		app.post("/strict", idempotency({ enforceHeader: true }), () => json({ ok: true }));
+		app.post("/strict", idempotency({ enforceHeader: true }), () =>
+			json({ ok: true }),
+		);
 
 		const server = app.listen(0);
 
 		try {
-			const res = await fetch(`http://localhost:${server.port}/strict`, { method: "POST" });
+			const res = await fetch(`http://localhost:${server.port}/strict`, {
+				method: "POST",
+			});
 			expect(res.status).toBe(400);
 			const err = await res.json();
 			expect(err.error).toBe("Bad Request");

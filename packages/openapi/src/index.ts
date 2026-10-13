@@ -1,17 +1,31 @@
 import { App, type Context, HttpError, RouteGroup, json } from "@barqel/barq";
 import { OpenAPIRegistry } from "./registry";
-import type { OpenAPIOptions, RouteConfig, RouteSchema, StandardSchemaV1 } from "./types";
+import type {
+	OpenAPIOptions,
+	RouteConfig,
+	RouteSchema,
+	StandardSchemaV1,
+} from "./types";
 import { renderScalarHtml, renderSwaggerHtml } from "./ui";
 
 export * from "./types";
 export { OpenAPIRegistry, toOpenApiPath } from "./registry";
 export { toJsonSchema } from "./json-schema";
 
-async function executeValidate(validator: unknown, data: unknown): Promise<unknown> {
+async function executeValidate(
+	validator: unknown,
+	data: unknown,
+): Promise<unknown> {
 	if (!validator) return data;
 
-	if (typeof validator === "object" && validator !== null && "~standard" in validator) {
-		const res = await (validator as StandardSchemaV1)["~standard"].validate(data);
+	if (
+		typeof validator === "object" &&
+		validator !== null &&
+		"~standard" in validator
+	) {
+		const res = await (validator as StandardSchemaV1)["~standard"].validate(
+			data,
+		);
 		if (res.issues) {
 			throw new HttpError(422, {
 				error: "Validation Failed",
@@ -21,7 +35,11 @@ async function executeValidate(validator: unknown, data: unknown): Promise<unkno
 		return res.value;
 	}
 
-	if (typeof validator === "object" && validator !== null && "parse" in validator) {
+	if (
+		typeof validator === "object" &&
+		validator !== null &&
+		"parse" in validator
+	) {
 		try {
 			return (validator as { parse: (d: unknown) => unknown }).parse(data);
 		} catch (err) {
@@ -38,7 +56,8 @@ async function executeValidate(validator: unknown, data: unknown): Promise<unkno
 function createValidationMiddleware(schema: RouteSchema) {
 	return {
 		async before(ctx: Context) {
-			const validState: Record<string, unknown> = (ctx.valid as Record<string, unknown>) ?? {};
+			const validState: Record<string, unknown> =
+				(ctx.valid as Record<string, unknown>) ?? {};
 
 			if (schema.params) {
 				validState.params = await executeValidate(schema.params, ctx.params);
@@ -60,7 +79,11 @@ function createValidationMiddleware(schema: RouteSchema) {
 				validState.headers = await executeValidate(schema.headers, headerMap);
 			}
 
-			if (schema.body && ctx.req.method !== "GET" && ctx.req.method !== "HEAD") {
+			if (
+				schema.body &&
+				ctx.req.method !== "GET" &&
+				ctx.req.method !== "HEAD"
+			) {
 				const raw = await ctx.json<unknown>();
 				validState.body = await executeValidate(schema.body, raw);
 			}
@@ -78,7 +101,16 @@ function isRouteConfig(val: unknown): val is RouteConfig {
 	);
 }
 
-const HTTP_METHODS = ["get", "post", "put", "delete", "patch", "head", "options", "all"] as const;
+const HTTP_METHODS = [
+	"get",
+	"post",
+	"put",
+	"delete",
+	"patch",
+	"head",
+	"options",
+	"all",
+] as const;
 
 function wrapRouter(
 	router: App<any> | RouteGroup<any, any>,
@@ -88,7 +120,10 @@ function wrapRouter(
 	for (const method of HTTP_METHODS) {
 		const original = (router as Record<string, any>)[method].bind(router);
 
-		(router as Record<string, any>)[method] = (pattern: string, ...args: unknown[]) => {
+		(router as Record<string, any>)[method] = (
+			pattern: string,
+			...args: unknown[]
+		) => {
 			const first = args[0];
 			if (isRouteConfig(first)) {
 				const config = first;
@@ -96,10 +131,19 @@ function wrapRouter(
 				const schema = config.schema;
 
 				if (schema) {
-					const fullPath = prefix ? (pattern === "/" ? prefix : `${prefix}${pattern}`) : pattern;
+					const fullPath = prefix
+						? pattern === "/"
+							? prefix
+							: `${prefix}${pattern}`
+						: pattern;
 					registry.addRoute(method.toUpperCase(), fullPath, schema);
 					const validationMw = createValidationMiddleware(schema);
-					return original(pattern, validationMw, ...(config.middlewares ?? []), ...remaining);
+					return original(
+						pattern,
+						validationMw,
+						...(config.middlewares ?? []),
+						...remaining,
+					);
 				}
 
 				return original(pattern, ...(config.middlewares ?? []), ...remaining);
@@ -109,16 +153,26 @@ function wrapRouter(
 		};
 	}
 
-	const originalGroup = router.group.bind(router);
-	router.group = (subPrefix: string, ...args: unknown[]) => {
+	const originalGroup = (router as Record<string, any>).group.bind(router) as (
+		subPrefix: string,
+		...args: unknown[]
+	) => unknown;
+	(router as Record<string, any>).group = (
+		subPrefix: string,
+		...args: unknown[]
+	) => {
 		const callback = args[args.length - 1] as (g: RouteGroup<any, any>) => void;
 		const restArgs = args.slice(0, -1);
 		const fullGroupPrefix = prefix ? `${prefix}${subPrefix}` : subPrefix;
 
-		return originalGroup(subPrefix, ...restArgs, (group: RouteGroup<any, any>) => {
-			wrapRouter(group, registry, fullGroupPrefix);
-			callback(group);
-		});
+		return originalGroup(
+			subPrefix,
+			...restArgs,
+			(group: RouteGroup<any, any>) => {
+				wrapRouter(group, registry, fullGroupPrefix);
+				callback(group);
+			},
+		);
 	};
 }
 

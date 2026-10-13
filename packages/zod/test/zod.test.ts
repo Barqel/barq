@@ -52,7 +52,10 @@ describe("@barqel/barq-zod", () => {
 				query: z.object({ limit: z.string().transform(Number) }),
 			}),
 			(ctx) => {
-				const valid = ctx.valid as { params: { id: string }; query: { limit: number } };
+				const valid = ctx.valid as {
+					params: { id: string };
+					query: { limit: number };
+				};
 				return json({ id: Number(valid.params.id), limit: valid.query.limit });
 			},
 		);
@@ -60,11 +63,15 @@ describe("@barqel/barq-zod", () => {
 		const server = app.listen(0);
 
 		try {
-			const res = await fetch(`http://localhost:${server.port}/items/42?limit=10`);
+			const res = await fetch(
+				`http://localhost:${server.port}/items/42?limit=10`,
+			);
 			expect(res.status).toBe(200);
 			expect(await res.json()).toEqual({ id: 42, limit: 10 });
 
-			const invalidRes = await fetch(`http://localhost:${server.port}/items/not-a-number?limit=10`);
+			const invalidRes = await fetch(
+				`http://localhost:${server.port}/items/not-a-number?limit=10`,
+			);
 			expect(invalidRes.status).toBe(422);
 		} finally {
 			await app.stop();

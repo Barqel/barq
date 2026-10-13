@@ -16,9 +16,7 @@ export function staticFiles(options: StaticOptions) {
 	const prefix = options.prefix ?? "";
 	const normalizedPrefix = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
 
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		if (normalizedPrefix) {
 			app.get(`${normalizedPrefix}/*path`, handler);
 			app.head(`${normalizedPrefix}/*path`, handler);

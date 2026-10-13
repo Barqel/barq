@@ -11,7 +11,9 @@ export interface IdempotencyRecord {
 }
 
 export interface IdempotencyStore {
-	get(key: string): Promise<IdempotencyRecord | undefined> | IdempotencyRecord | undefined;
+	get(
+		key: string,
+	): Promise<IdempotencyRecord | undefined> | IdempotencyRecord | undefined;
 	set(key: string, record: IdempotencyRecord): Promise<void> | void;
 	delete(key: string): Promise<void> | void;
 	clear(): Promise<void> | void;

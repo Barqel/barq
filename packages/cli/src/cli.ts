@@ -1,5 +1,11 @@
 import { parseArgv } from "./parser";
-import type { CliOptions, CommandAction, CommandContext, CommandDefinition, CommandFlag } from "./types";
+import type {
+	CliOptions,
+	CommandAction,
+	CommandContext,
+	CommandDefinition,
+	CommandFlag,
+} from "./types";
 
 const RESET = "\x1b[0m";
 const GREEN = "\x1b[32m";
@@ -22,7 +28,9 @@ export class Cli {
 
 	command(
 		signature: string,
-		options: { description?: string; flags?: Record<string, CommandFlag> } | CommandAction,
+		options:
+			| { description?: string; flags?: Record<string, CommandFlag> }
+			| CommandAction,
 		action?: CommandAction,
 	): this {
 		const parsed = this.parseSignature(signature);
@@ -60,7 +68,9 @@ export class Cli {
 
 		const cmd = this.commands.get(parsed.command);
 		if (!cmd) {
-			console.error(`${RED}Error: Unknown command "${parsed.command}"${RESET}\n`);
+			console.error(
+				`${RED}Error: Unknown command "${parsed.command}"${RESET}\n`,
+			);
 			this.showHelp();
 			process.exitCode = 1;
 			return;
@@ -71,7 +81,9 @@ export class Cli {
 			const def = cmd.argsDefinition[i]!;
 			const val = parsed.positionals[i];
 			if (def.required && val === undefined) {
-				console.error(`${RED}Error: Missing required argument <${def.name}>${RESET}`);
+				console.error(
+					`${RED}Error: Missing required argument <${def.name}>${RESET}`,
+				);
 				process.exitCode = 1;
 				return;
 			}
@@ -119,7 +131,10 @@ export class Cli {
 		}
 	}
 
-	private parseSignature(sig: string): { name: string; args: Array<{ name: string; required: boolean }> } {
+	private parseSignature(sig: string): {
+		name: string;
+		args: Array<{ name: string; required: boolean }>;
+	} {
 		const parts = sig.trim().split(/\s+/);
 		const name = parts[0]!;
 		const args: Array<{ name: string; required: boolean }> = [];
@@ -137,33 +152,47 @@ export class Cli {
 	}
 
 	private showHelp(): void {
-		console.log(`\n${BOLD}${this.name}${RESET} v${this.version} - ${this.description}\n`);
-		console.log(`${BOLD}Usage:${RESET} ${this.name} <command> [arguments] [flags]\n`);
+		console.log(
+			`\n${BOLD}${this.name}${RESET} v${this.version} - ${this.description}\n`,
+		);
+		console.log(
+			`${BOLD}Usage:${RESET} ${this.name} <command> [arguments] [flags]\n`,
+		);
 		console.log(`${BOLD}Available Commands:${RESET}`);
 
 		const entries = Array.from(this.commands.values());
 		const maxLen = Math.max(...entries.map((c) => c.name.length), 8);
 
 		for (const cmd of entries) {
-			console.log(`  ${GREEN}${cmd.name.padEnd(maxLen + 4)}${RESET} ${cmd.description ?? ""}`);
+			console.log(
+				`  ${GREEN}${cmd.name.padEnd(maxLen + 4)}${RESET} ${cmd.description ?? ""}`,
+			);
 		}
 
-		console.log(`\nUse "${this.name} <command> --help" for detailed command instructions.\n`);
+		console.log(
+			`\nUse "${this.name} <command> --help" for detailed command instructions.\n`,
+		);
 	}
 
 	private showCommandHelp(cmd: CommandDefinition): void {
 		console.log(`\n${BOLD}Command:${RESET} ${cmd.name}`);
 		if (cmd.description) console.log(`${cmd.description}\n`);
 
-		const argStr = cmd.argsDefinition.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`)).join(" ");
-		console.log(`${BOLD}Usage:${RESET} ${this.name} ${cmd.name} ${argStr} [flags]\n`);
+		const argStr = cmd.argsDefinition
+			.map((a) => (a.required ? `<${a.name}>` : `[${a.name}]`))
+			.join(" ");
+		console.log(
+			`${BOLD}Usage:${RESET} ${this.name} ${cmd.name} ${argStr} [flags]\n`,
+		);
 
 		const flagEntries = Object.entries(cmd.flags);
 		if (flagEntries.length > 0) {
 			console.log(`${BOLD}Flags:${RESET}`);
 			for (const [name, flag] of flagEntries) {
 				const aliasPart = flag.alias ? `-${flag.alias}, ` : "    ";
-				console.log(`  ${aliasPart}--${name.padEnd(16)} ${flag.description ?? ""} ${flag.default !== undefined ? `(default: ${flag.default})` : ""}`);
+				console.log(
+					`  ${aliasPart}--${name.padEnd(16)} ${flag.description ?? ""} ${flag.default !== undefined ? `(default: ${flag.default})` : ""}`,
+				);
 			}
 			console.log("");
 		}

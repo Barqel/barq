@@ -12,7 +12,10 @@ export function sse(
 	options?: SseOptions,
 ): Response {
 	if (typeof ctxOrHandler === "function") {
-		return createSseResponse(ctxOrHandler, (handlerOrOptions as SseOptions) ?? {});
+		return createSseResponse(
+			ctxOrHandler,
+			(handlerOrOptions as SseOptions) ?? {},
+		);
 	}
 
 	const ctx = ctxOrHandler as Context;

@@ -19,7 +19,12 @@ describe("@barqel/barq-pubsub", () => {
 				const data = JSON.parse(msg.toString());
 				if (data.action === "join") {
 					pubsub.subscribe(ws, data.room);
-					ws.send(JSON.stringify({ joined: data.room, size: pubsub.getRoomSize(data.room) }));
+					ws.send(
+						JSON.stringify({
+							joined: data.room,
+							size: pubsub.getRoomSize(data.room),
+						}),
+					);
 				} else if (data.action === "send") {
 					pubsub.publish(data.room, JSON.stringify({ message: data.text }));
 				}
@@ -37,8 +42,12 @@ describe("@barqel/barq-pubsub", () => {
 
 			await new Promise((resolve) => {
 				let connected = 0;
-				client1.onopen = () => { if (++connected === 2) resolve(null); };
-				client2.onopen = () => { if (++connected === 2) resolve(null); };
+				client1.onopen = () => {
+					if (++connected === 2) resolve(null);
+				};
+				client2.onopen = () => {
+					if (++connected === 2) resolve(null);
+				};
 			});
 
 			const c1Msgs: any[] = [];
@@ -53,11 +62,17 @@ describe("@barqel/barq-pubsub", () => {
 			await Bun.sleep(50);
 			expect(pubsub.getRoomSize("general")).toBe(2);
 
-			client1.send(JSON.stringify({ action: "send", room: "general", text: "Hello World" }));
+			client1.send(
+				JSON.stringify({
+					action: "send",
+					room: "general",
+					text: "Hello World",
+				}),
+			);
 
 			await Bun.sleep(50);
 
-			const receivedC2 = c2Msgs.find(m => m.message === "Hello World");
+			const receivedC2 = c2Msgs.find((m) => m.message === "Hello World");
 			expect(receivedC2).toBeDefined();
 
 			client1.close();
@@ -67,7 +82,7 @@ describe("@barqel/barq-pubsub", () => {
 
 			client2.close();
 			await Bun.sleep(50);
-			
+
 			expect(pubsub.getRoomSize("general")).toBe(0);
 		} finally {
 			await app.stop();

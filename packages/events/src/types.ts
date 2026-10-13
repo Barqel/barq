@@ -1,4 +1,7 @@
-export type EventListener<T = any> = (payload: T, eventName: string) => void | Promise<void>;
+export type EventListener<T = any> = (
+	payload: T,
+	eventName: string,
+) => void | Promise<void>;
 
 export interface EventBusOptions {
 	wildcards?: boolean;

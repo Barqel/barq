@@ -3,10 +3,10 @@ import { App, empty, json, text } from "../src";
 const app = new App();
 
 app.get("/", () =>
-  json({
-    name: "Barq",
-    message: "Your Bun HTTP server is running.",
-  }),
+	json({
+		name: "Barq",
+		message: "Your Bun HTTP server is running.",
+	}),
 );
 
 app.get("/hello/:name", (ctx) => text(`Hello, ${ctx.params.name}!`));

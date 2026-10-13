@@ -9,7 +9,8 @@ export * from "./registry";
 export function prometheusPlugin(options: PrometheusOptions = {}) {
 	const metricsPath = options.metricsPath ?? "/metrics";
 	const defaultMetrics = options.defaultMetrics ?? true;
-	const normalizePath = options.normalizePath ?? ((pathname: string) => pathname);
+	const normalizePath =
+		options.normalizePath ?? ((pathname: string) => pathname);
 	const skip = options.skip ?? (() => false);
 
 	const registry = new Registry();
@@ -31,9 +32,7 @@ export function prometheusPlugin(options: PrometheusOptions = {}) {
 		updateSystemMetrics = collectDefaultMetrics(registry);
 	}
 
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		app.use({
 			before(ctx: Context) {
 				if (ctx.pathname === metricsPath || skip(ctx)) return;
@@ -42,7 +41,9 @@ export function prometheusPlugin(options: PrometheusOptions = {}) {
 			after(ctx: Context, res: Response) {
 				if (ctx.pathname === metricsPath || skip(ctx)) return res;
 
-				const startTime = (ctx.state as any)._promStartTime as number | undefined;
+				const startTime = (ctx.state as any)._promStartTime as
+					| number
+					| undefined;
 				if (startTime !== undefined) {
 					const durationSec = (performance.now() - startTime) / 1000;
 					const path = normalizePath(ctx.pathname, ctx);

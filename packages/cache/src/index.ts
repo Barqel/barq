@@ -9,9 +9,7 @@ export * from "./middleware";
 
 export function cachePlugin(options: CacheOptions = {}) {
 	const mw = cache(options);
-	return <TState extends object = Record<string, unknown>>(
-		app: App<TState>,
-	) => {
+	return (app: App<any>) => {
 		app.use(mw);
 	};
 }

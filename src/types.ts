@@ -16,12 +16,12 @@ export type BeforeResult<TOutput extends object = Record<string, unknown>> =
 	| TOutput
 	| void
 	| undefined
-	| Promise<Response | TOutput | undefined>;
+	| Promise<Response | TOutput | void | undefined>;
 export type AfterResult =
 	| Response
 	| void
 	| undefined
-	| Promise<Response | undefined>;
+	| Promise<Response | void | undefined>;
 
 export interface Middleware<
 	TState extends object = Record<string, unknown>,

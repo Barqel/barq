@@ -25,8 +25,12 @@ export function rateLimit(options: RateLimitOptions = {}): Middleware {
 			}
 
 			const key = await keyGenerator(ctx);
-			const maxLimit = typeof maxOption === "function" ? await maxOption(ctx) : maxOption;
-			const { totalHits, timeToResetMs, resetTime } = await store.increment(key, windowMs);
+			const maxLimit =
+				typeof maxOption === "function" ? await maxOption(ctx) : maxOption;
+			const { totalHits, timeToResetMs, resetTime } = await store.increment(
+				key,
+				windowMs,
+			);
 
 			const remaining = Math.max(0, maxLimit - totalHits);
 			const retryAfter = Math.ceil(timeToResetMs / 1000);
@@ -72,7 +76,10 @@ export function rateLimit(options: RateLimitOptions = {}): Middleware {
 								retryAfter,
 							};
 
-				const response = typeof body === "string" ? new Response(body, { status: statusCode }) : json(body, statusCode);
+				const response =
+					typeof body === "string"
+						? new Response(body, { status: statusCode })
+						: json(body, statusCode);
 
 				for (const [k, v] of headersToSet.entries()) {
 					response.headers.set(k, v);
