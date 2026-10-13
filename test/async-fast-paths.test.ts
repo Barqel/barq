@@ -85,8 +85,12 @@ describe("async handlers on fast-path routes", () => {
 
 	it("does not throw when params-only and lightweight handlers return undefined", async () => {
 		const app = new App();
-		app.get("/a/:id", ({ params }) => undefined);
-		app.get("/b/:id", ({ params, req }) => undefined);
+		// The destructured props must keep their exact names: the scanner derives the
+		// fast-path branch from `params` / `req`, so renaming them would move these
+		// routes off the branch under test. `void <x>` reads the prop and still
+		// evaluates to undefined, which is the return value being asserted.
+		app.get("/a/:id", ({ params }) => void params);
+		app.get("/b/:id", ({ params, req }) => void (params && req));
 		const server = app.listen(0);
 
 		try {
@@ -109,6 +113,7 @@ describe("async handlers on fast-path routes", () => {
 			throw new Error("context-free boom");
 		});
 		app.get("/b/:id", async ({ params, req }) => {
+			void req;
 			throw new Error(`light ${params.id}`);
 		});
 		const server = app.listen(0);

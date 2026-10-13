@@ -1,6 +1,6 @@
 {
 	"name": "@barqel/barq",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "Zero dependencies. Maximum performance. HTTP for Bun and Node.js; native WebSockets for Bun.",
 	"type": "module",
 	"main": "./dist/index.js",
