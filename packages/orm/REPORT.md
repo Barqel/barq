@@ -524,6 +524,29 @@ PostgreSQL 16.15 and 18.6 servers; it covers a `MAX` signed 64-bit value, model
 insert ids, relation aggregates and raw SQL (which remains a decimal string on
 both server drivers), plus rollback and cleanup.
 
+### 4.8 First hosted GitHub Actions run
+
+The workflow (`.github/workflows/orm.yml`) was pushed and observed through the
+public GitHub API:
+
+- Run `39199331811` (`ab9a6c9`) — **failure**: both jobs stopped at
+  `bun install --frozen-lockfile` ("lockfile had changes, but lockfile is
+  frozen") because the committed root `bun.lock` predated `packages/orm`. The
+  failure was reproduced in a clean `git clone` before fixing anything.
+- Run `39199669711` (`caefc1b`) — **success**, both jobs green:
+  - `Types, lint, build, SQLite`: install → biome → `typecheck` →
+    `typecheck:tests` → `bun test` → `build`.
+  - `Live MySQL and PostgreSQL`: install → `bun test` against the workflow's
+    own `mysql:8.4` and `postgres:16` service containers.
+
+The fix (`caefc1b`) refreshes the workspace lockfile from the committed
+`package.json` files only — it adds `packages/orm` and the previously missing
+`packages/client`/`packages/env` workspace entries, and carries no working-tree
+WIP. Before pushing, the exact CI sequence was rehearsed in a clean clone of
+the pushed commit with that lockfile: frozen install (no changes), biome (46
+files clean), both typechecks, `bun test` (208 pass / 2 skip / 0 fail), build,
+and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
+
 ---
 
 ## 5. Test / verification strategy and results
@@ -647,9 +670,12 @@ both server drivers), plus rollback and cleanup.
   MySQL 8.4.11 and PostgreSQL 16.15 and 18.6. The env-gated entry points still
   skip by default when those URLs are absent; the committed GitHub Actions
   workflow supplies both service containers to reproduce the 250-test run.
-- The CI workflow is present and its YAML/services/commands were validated
-  locally, but this session did not execute a GitHub-hosted Actions run. Live
-  evidence comes from the local servers and from the packed smoke tests.
+- The CI workflow executed on a hosted GitHub runner after the push: run
+  `39199669711` (`caefc1b`) is green for both the `verify` job and the
+  `live-dialects` job against the workflow's own MySQL 8.4 and PostgreSQL 16
+  service containers (`mysql:8.4` + `postgres:16`). Run `39199331811`
+  (`ab9a6c9`) had failed first at `bun install --frozen-lockfile`; the lockfile
+  fix and its local rehearsal are documented in §4.8.
 - The full 250-test suite ran under Bun only; the `node:sqlite` path is covered
   by the packed BigInt smoke test on Node v24.21.0 (§4.7), not by the full
   suite.
@@ -772,15 +798,13 @@ No failing tests are hidden; no fake implementations are presented as real.
 5. Publish to npm when ready: `license: MIT`, `publishConfig.access: public`,
    repository/homepage/bugs metadata and `prepublishOnly` are already set;
    the package has not actually been published.
-6. Observe the new CI workflow on GitHub after the next push (it was not run on
-   a hosted runner during this local session).
-7. Deferred by scope (Priority 2): Eloquent cast/date parity (`int`/`float`/
+6. Deferred by scope (Priority 2): Eloquent cast/date parity (`int`/`float`/
    `object`/`immutable`/parameterized casts) and Blueprint/migrator extras
    (`fresh`/`refresh`/`reset`/`pretend`).
-8. Deferred by scope (Priority 2/3): pruning, factories/seeders,
+7. Deferred by scope (Priority 2/3): pruning, factories/seeders,
    multi-connection routing, macros, JSON extras and
    `whereMorphedTo`/`whereAttachedTo`.
-9. Deferred by scope (Priority 3): custom pivot models (`using`) and pivot
+8. Deferred by scope (Priority 3): custom pivot models (`using`) and pivot
    casts/events (see §7.24).
 
 ---
@@ -839,7 +863,8 @@ BARQ_ORM_PG_URL='postgres:///barq_orm_test?host=/var/run/postgresql' \
   URLs configured (1157 assertions across 250 tests, 11 files). Without servers
   the same command is `208 pass / 2 skip / 0 fail` (210 tests, 905 assertions),
   skipping only those two gated entry points.
-- The CI workflow was added and locally validated (YAML parsed; service images,
-  install and test commands match the executed local gate), but no GitHub
-  Actions run was executed during this session. This is explicitly **not
-  verified on a hosted runner** yet.
+- The CI workflow ran on a hosted GitHub runner (run `39199669711`, `caefc1b`):
+  both jobs are green, including the live MySQL/PostgreSQL service-container
+  job. The preceding run failed at `bun install --frozen-lockfile`; the
+  lockfile was refreshed from committed files only, rehearsed in a clean clone,
+  and the rerun passed (§4.8).
