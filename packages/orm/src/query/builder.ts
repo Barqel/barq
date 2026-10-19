@@ -25,6 +25,7 @@ import type { Orm, TableMeta } from "../orm";
 import {
 	type AnyRelationDescriptor,
 	type AnyRelations,
+	morphColumns,
 	relationAt,
 } from "../relations/descriptors";
 import { ofManyPredicateSql } from "../relations/of-many";
@@ -127,6 +128,60 @@ function emptyState(): BuilderState {
 		lock: null,
 		softDeleteMode: "default",
 	};
+}
+
+/** Plain JSON key segment (no wildcards or quoted keys). */
+const JSON_PATH_SEGMENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * Normalizes a JSON path into SQLite/MySQL (`$.a.b`) and PostgreSQL
+ * (`{a,b}`) forms. Only plain key segments are accepted.
+ */
+function parseJsonPath(
+	path: string,
+	caller: string,
+): { sqlite: string; pg: string } {
+	const trimmed = path.startsWith("$") ? path : `$.${path}`;
+	const body = trimmed.startsWith("$.") ? trimmed.slice(2) : "";
+	const segments = body.split(".");
+	if (
+		body === "" ||
+		segments.some(
+			(segment) => segment === "" || !JSON_PATH_SEGMENT.test(segment),
+		)
+	) {
+		throw new InvalidQueryError(
+			`${caller}(): unsupported JSON path ${JSON.stringify(path)}. Use plain key segments like "$.a.b" (no wildcards or quoted keys).`,
+		);
+	}
+	return { sqlite: trimmed, pg: `{${segments.join(",")}}` };
+}
+
+/**
+ * SQLite containment predicates over a JSON expression: value equality for
+ * scalars, element containment for arrays and key/value containment for
+ * objects.
+ */
+function jsonContainsSqlite(
+	column: string,
+	path: string | null,
+	value: unknown,
+): unknown {
+	const atPath =
+		path === null
+			? sql`${sql.ref(column)}`
+			: sql`json_extract(${sql.ref(column)}, ${path})`;
+	if (Array.isArray(value)) {
+		return sql`not exists (select 1 from json_each(${atPath}) as expected where expected.value not in (select value from json_each(${atPath})))`;
+	}
+	if (value !== null && typeof value === "object") {
+		const keyPath =
+			path === null
+				? sql`'$.' || expected.key`
+				: sql`${path} || '.' || expected.key`;
+		return sql`not exists (select 1 from json_each(${JSON.stringify(value)}) as expected where json_extract(${sql.ref(column)}, ${keyPath}) is not expected.value)`;
+	}
+	return sql`exists (select 1 from json_each(${atPath}) where json_each.value = ${value})`;
 }
 
 /** Parses `"posts as pending"` into its relation/alias parts. */
@@ -639,6 +694,7 @@ interface RelationStep {
  * The query builder. Use `orm.table(name)` for the lightweight row path or
  * `Model.query()` for the model path.
  */
+// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: intentional — the interface below merges user macro declarations into this class
 export class QueryBuilder<
 	S extends Schema,
 	T extends TableName<S>,
@@ -687,6 +743,25 @@ export class QueryBuilder<
 					scope(this as unknown);
 				}
 			}
+		}
+		// Registered macro methods (orm.macro) become own methods of every
+		// builder created afterwards, so chains read like real methods.
+		for (const name of orm.macroNames()) {
+			if (name in this) continue;
+			const implementation = orm.macroImplementation(name);
+			if (implementation === undefined) continue;
+			Object.defineProperty(this, name, {
+				value: (...args: unknown[]) =>
+					(
+						implementation as unknown as (
+							builder: unknown,
+							...rest: unknown[]
+						) => unknown
+					).apply(this, [this, ...args]),
+				writable: true,
+				configurable: true,
+				enumerable: false,
+			});
 		}
 	}
 
@@ -1390,35 +1465,124 @@ export class QueryBuilder<
 		return this.#dateWhere("year", column, operator, value);
 	}
 
-	/** JSON containment (`@>`, `JSON_CONTAINS`, SQLite `json_each`). */
-	whereJsonContains(column: ColumnRef<S, T, J>, value: unknown): this {
+	/**
+	 * JSON containment (`@>`, `JSON_CONTAINS`, SQLite `json_each`). Pass a
+	 * deep path as the third argument (`"$.tags"` or `"tags"`).
+	 */
+	whereJsonContains(
+		column: ColumnRef<S, T, J>,
+		value: unknown,
+		path?: string,
+	): this {
 		this.#assertColumn(column);
 		const dialect = this.orm.dialectKind;
+		const jsonPath =
+			path === undefined ? null : parseJsonPath(path, "whereJsonContains");
 		return this.#pushWhere("and", {
 			kind: "custom",
 			build: () => {
+				if (jsonPath !== null) {
+					if (dialect === "mysql") {
+						return sql`json_contains(json_extract(${sql.ref(column)}, ${jsonPath.sqlite}), ${JSON.stringify(value)})`;
+					}
+					if (dialect === "postgres") {
+						return sql`(${sql.ref(column)} #> ${jsonPath.pg}) @> ${JSON.stringify(value)}::jsonb`;
+					}
+					return jsonContainsSqlite(
+						column as unknown as string,
+						jsonPath.sqlite,
+						value,
+					) as never;
+				}
 				if (dialect === "mysql") {
 					return sql`json_contains(${sql.ref(column)}, ${JSON.stringify(value)})`;
 				}
 				if (dialect === "postgres") {
 					return sql`(${sql.ref(column)})::jsonb @> ${JSON.stringify(value)}::jsonb`;
 				}
-				if (Array.isArray(value)) {
-					return sql`not exists (select 1 from json_each(${JSON.stringify(value)}) as expected where expected.value not in (select value from json_each(${sql.ref(column)})))`;
-				}
-				if (value !== null && typeof value === "object") {
-					return sql`not exists (select 1 from json_each(${JSON.stringify(value)}) as expected where json_extract(${sql.ref(column)}, '$.' || expected.key) is not expected.value)`;
-				}
-				return sql`exists (select 1 from json_each(${sql.ref(column)}) where json_each.value = ${value})`;
+				return jsonContainsSqlite(
+					column as unknown as string,
+					null,
+					value,
+				) as never;
 			},
 		});
 	}
 
-	/** Compares the array length of a JSON column. */
+	/**
+	 * Whether a JSON path exists (`whereJsonContainsKey("options", "$.ui.theme")`).
+	 */
+	whereJsonContainsKey(column: ColumnRef<S, T, J>, path: string): this {
+		this.#assertColumn(column);
+		const dialect = this.orm.dialectKind;
+		const jsonPath = parseJsonPath(path, "whereJsonContainsKey");
+		return this.#pushWhere("and", {
+			kind: "custom",
+			build: () => {
+				if (dialect === "mysql") {
+					return sql`json_contains_path(${sql.ref(column)}, 'one', ${jsonPath.sqlite})`;
+				}
+				if (dialect === "postgres") {
+					return sql`((${sql.ref(column)})::jsonb #> ${jsonPath.pg}::text[]) is not null`;
+				}
+				return sql`json_type(${sql.ref(column)}, ${jsonPath.sqlite}) is not null`;
+			},
+		});
+	}
+
+	/** Negation of `whereJsonContainsKey` (path absent). */
+	whereJsonDoesntContainKey(column: ColumnRef<S, T, J>, path: string): this {
+		this.#assertColumn(column);
+		const dialect = this.orm.dialectKind;
+		const jsonPath = parseJsonPath(path, "whereJsonDoesntContainKey");
+		return this.#pushWhere("and", {
+			kind: "custom",
+			build: () => {
+				if (dialect === "mysql") {
+					return sql`not json_contains_path(${sql.ref(column)}, 'one', ${jsonPath.sqlite})`;
+				}
+				if (dialect === "postgres") {
+					return sql`((${sql.ref(column)})::jsonb #> ${jsonPath.pg}::text[]) is null`;
+				}
+				return sql`json_type(${sql.ref(column)}, ${jsonPath.sqlite}) is null`;
+			},
+		});
+	}
+
+	/**
+	 * JSON overlap — does the column share any element/key with `value`.
+	 * MySQL (`JSON_OVERLAPS`) and PostgreSQL (`&&`) only; SQLite throws.
+	 */
+	whereJsonOverlaps(column: ColumnRef<S, T, J>, value: unknown): this {
+		this.#assertColumn(column);
+		const dialect = this.orm.dialectKind;
+		if (dialect === "sqlite") {
+			throw new InvalidQueryError(
+				"whereJsonOverlaps(): SQLite has no JSON overlap operator (use whereJsonContains with an explicit element).",
+			);
+		}
+		return this.#pushWhere("and", {
+			kind: "custom",
+			build: () => {
+				if (dialect === "mysql") {
+					return sql`json_overlaps(${sql.ref(column)}, ${JSON.stringify(value)})`;
+				}
+				// PostgreSQL has no jsonb `&&`; MySQL's JSON_OVERLAPS equals
+				// "containment in either direction".
+				const json = JSON.stringify(value);
+				return sql`((${sql.ref(column)})::jsonb @> ${json}::jsonb or (${sql.ref(column)})::jsonb <@ ${json}::jsonb)`;
+			},
+		});
+	}
+
+	/**
+	 * Compares the array length of a JSON column (optionally at a deep path).
+	 */
 	whereJsonLength(
 		column: ColumnRef<S, T, J>,
 		operator: ComparisonOperator,
 		length: number,
+		path?: string,
 	): this {
 		this.#assertColumn(column);
 		if (!KNOWN_JOIN_OPERATORS.has(operator)) {
@@ -1427,12 +1591,20 @@ export class QueryBuilder<
 			);
 		}
 		const dialect = this.orm.dialectKind;
+		const jsonPath =
+			path === undefined ? null : parseJsonPath(path, "whereJsonLength");
 		const expression =
 			dialect === "mysql"
-				? sql`json_length(${sql.ref(column)})`
+				? jsonPath === null
+					? sql`json_length(${sql.ref(column)})`
+					: sql`json_length(json_extract(${sql.ref(column)}, ${jsonPath.sqlite}))`
 				: dialect === "postgres"
-					? sql`jsonb_array_length((${sql.ref(column)})::jsonb)`
-					: sql`json_array_length(${sql.ref(column)})`;
+					? jsonPath === null
+						? sql`jsonb_array_length((${sql.ref(column)})::jsonb)`
+						: sql`jsonb_array_length((${sql.ref(column)}) #> ${jsonPath.pg})`
+					: jsonPath === null
+						? sql`json_array_length(${sql.ref(column)})`
+						: sql`json_array_length(${sql.ref(column)}, ${jsonPath.sqlite})`;
 		return this.#pushWhere("and", {
 			kind: "custom",
 			build: (eb) =>
@@ -2643,6 +2815,174 @@ export class QueryBuilder<
 			modelOrClass as unknown as { get(column: string): unknown }
 		).get(ownerKey);
 		return this.where(foreignKey as never, value as never);
+	}
+
+	/**
+	 * Constrains a morphTo relation by a morph target: a model instance
+	 * (type + key), a model class (type only) or a raw morph alias.
+	 *
+	 * ```ts
+	 * Comment.whereMorphedTo("commentable", post);
+	 * Comment.whereMorphedTo("commentable", Post);   // any morph type "posts"
+	 * ```
+	 */
+	whereMorphedTo(relation: string, target: object | string): this {
+		const resolved = this.#morphTarget(relation, target, "whereMorphedTo");
+		this.where(resolved.typeColumn as never, resolved.alias as never);
+		if (resolved.key !== undefined) {
+			this.where(resolved.idColumn as never, resolved.key as never);
+		}
+		return this;
+	}
+
+	/** Negation of `whereMorphedTo` (type differs, or id differs on a type match). */
+	whereNotMorphedTo(relation: string, target: object | string): this {
+		const resolved = this.#morphTarget(relation, target, "whereNotMorphedTo");
+		return this.whereNot((group: WhereGroup<S, T, J>) => {
+			group.where(resolved.typeColumn as never, resolved.alias as never);
+			if (resolved.key !== undefined) {
+				group.where(resolved.idColumn as never, resolved.key as never);
+			}
+		});
+	}
+
+	/**
+	 * Constrains by a model this query's models are attached to:
+	 *
+	 *  - `belongsTo` → `foreignKey = target.<ownerKey>`
+	 *  - `morphTo` → `whereMorphedTo(relation, target)`
+	 *  - `hasOne` / `hasMany` / `morphOne` / `morphMany` → `whereHas`
+	 *    constrained to the target's key.
+	 *
+	 * Pivot relations (`belongsToMany` / `morphToMany`) are not supported
+	 * here — use `whereHas` with the relation manager's `wherePivot`.
+	 */
+	whereAttachedTo(target: object, relation?: string): this {
+		this.#attachedTo(target, relation, "whereAttachedTo", false);
+		return this;
+	}
+
+	/** Negation of `whereAttachedTo`. */
+	whereNotAttachedTo(target: object, relation?: string): this {
+		this.#attachedTo(target, relation, "whereNotAttachedTo", true);
+		return this;
+	}
+
+	#morphTarget(
+		relation: string,
+		target: object | string,
+		caller: string,
+	): { typeColumn: string; idColumn: string; alias: string; key: unknown } {
+		const relations = this.#relations() ?? {};
+		const descriptor = this.#requireRelation(relations, relation, caller);
+		if (descriptor.kind !== "morphTo") {
+			throw new InvalidQueryError(
+				`${caller}(${JSON.stringify(relation)}): relation is not morphTo.`,
+			);
+		}
+		const { idColumn, typeColumn } = morphColumns(descriptor);
+		if (typeof target === "string") {
+			return { typeColumn, idColumn, alias: target, key: undefined };
+		}
+		const cls = (
+			typeof target === "function" ? target : target.constructor
+		) as object;
+		const alias = this.orm.morphAlias(cls);
+		if (alias === "") {
+			throw new InvalidQueryError(
+				`${caller}(): could not resolve a morph alias for the given model — declare \`static morphAlias\` or register it with \`orm.morphMap()\`.`,
+			);
+		}
+		if (typeof target === "function") {
+			return { typeColumn, idColumn, alias, key: undefined };
+		}
+		const key = (target as unknown as { get(column: string): unknown }).get(
+			"id",
+		);
+		return { typeColumn, idColumn, alias, key };
+	}
+
+	#attachedTo(
+		target: object,
+		relation: string | undefined,
+		caller: string,
+		negate: boolean,
+	): void {
+		const relatedClass = (
+			typeof target === "function" ? target : target.constructor
+		) as object;
+		const relations = this.#relations() ?? {};
+		let name = relation;
+		if (name === undefined) {
+			const isTarget = (descriptor: AnyRelationDescriptor): boolean => {
+				if (descriptor.related?.() === relatedClass) return true;
+				const types = descriptor.types?.();
+				return (
+					types !== undefined &&
+					Object.values(types).some((candidate) => candidate === relatedClass)
+				);
+			};
+			name = Object.entries(relations).find(([, descriptor]) =>
+				isTarget(descriptor),
+			)?.[0];
+		}
+		if (name === undefined) {
+			throw new InvalidQueryError(
+				`${caller}(): could not infer a relation for the given model. Pass the relation name explicitly.`,
+			);
+		}
+		const descriptor = this.#requireRelation(relations, name, caller);
+		const read = (column: string): unknown =>
+			(target as unknown as { get(c: string): unknown }).get(column);
+		switch (descriptor.kind) {
+			case "belongsTo": {
+				const foreignKey = requireKey(
+					descriptor.foreignKey,
+					descriptor.kind,
+					name,
+				);
+				const ownerKey = descriptor.ownerKey ?? "id";
+				const value = read(ownerKey);
+				if (negate) {
+					this.whereNot((group: WhereGroup<S, T, J>) => {
+						group.where(foreignKey as never, value as never);
+					});
+				} else {
+					this.where(foreignKey as never, value as never);
+				}
+				return;
+			}
+			case "morphTo": {
+				if (negate) this.whereNotMorphedTo(name, target);
+				else this.whereMorphedTo(name, target);
+				return;
+			}
+			case "hasOne":
+			case "hasMany":
+			case "morphOne":
+			case "morphMany":
+			case "belongsToMany":
+			case "morphToMany":
+			case "hasManyThrough":
+			case "hasOneThrough": {
+				// The target is attached through this relation: constrain the
+				// related side to the target's primary key (assumed `id`).
+				const value = read("id");
+				const callback = (query: unknown): void => {
+					(query as { where(column: string, value: unknown): unknown }).where(
+						"id",
+						value,
+					);
+				};
+				if (negate) this.whereDoesntHave(name as never, callback as never);
+				else this.whereHas(name as never, callback as never);
+				return;
+			}
+			default:
+				throw new InvalidQueryError(
+					`${caller}(${JSON.stringify(name)}): pivot relations are not supported — use whereHas() with the relation manager's wherePivot().`,
+				);
+		}
 	}
 
 	/**
@@ -4278,3 +4618,34 @@ export type WithAggregateConstraints<M, S extends Schema> = {
 		P
 	>;
 };
+
+/**
+ * Augmentation point for `orm.macro()` (Eloquent's `Builder::macro`).
+ *
+ * ```ts
+ * declare module "@barqel/barq-orm" {
+ *   interface QueryBuilderMacros {
+ *     whereActive(): this;
+ *   }
+ * }
+ * orm.macro("whereActive", function (this: unknown, query) {
+ *   (query as QueryBuilder<Schema, "users">).where("active", "=", true);
+ * });
+ * ```
+ */
+// biome-ignore lint/suspicious/noEmptyInterface: declaration-merging target — users add their own macro methods here
+export interface QueryBuilderMacros {}
+
+/**
+ * Merges user-declared macros into every `QueryBuilder` instance type. The
+ * macro's `this` stays the concrete builder, so chains keep compiling.
+ */
+// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: intentional — this interface merges user macro declarations into the QueryBuilder class
+export interface QueryBuilder<
+	S extends Schema,
+	T extends TableName<S>,
+	M = undefined,
+	Loaded = unknown,
+	Sel extends ColumnNameOf<S, T> | null = null,
+	J extends TableName<S> = never,
+> extends QueryBuilderMacros {}

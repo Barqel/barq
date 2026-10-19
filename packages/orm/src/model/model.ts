@@ -58,6 +58,7 @@ import {
 	onModelEvent,
 	withoutModelEvents,
 } from "./events";
+import { Factory } from "./factory";
 
 /** Guard token for the protected constructor. */
 const HYDRATE_TOKEN: unique symbol = Symbol("barq.orm.hydrateToken");
@@ -104,6 +105,13 @@ export interface ModelStaticLike {
 	readonly scopes?: Readonly<
 		Record<string, (query: unknown, ...args: unknown[]) => void>
 	>;
+	/**
+	 * Pruning constraint (`Model.prune()`): receives the query and narrows it
+	 * to the rows eligible for deletion.
+	 */
+	readonly prunable?: (query: unknown) => void;
+	/** Named connection this model routes its queries through. */
+	readonly connection?: string;
 	readonly timestamps?:
 		| boolean
 		| {
@@ -230,6 +238,20 @@ function installAccessorGetters(cls: object, meta: ModelMeta): void {
 }
 
 /**
+ * The ORM a model class routes through: `static connection` selects a named
+ * connection on the bound ORM, everything else stays on the default one.
+ * @internal
+ */
+export function connectionOrm(cls: ModelStaticLike): Orm<Schema> {
+	const base = cls.__orm;
+	const name = cls.connection;
+	if (typeof name !== "string" || name.length === 0 || name === "default") {
+		return base;
+	}
+	return base.connection(name);
+}
+
+/**
  * Resolves (and caches) the metadata of a model class.
  * @internal
  */
@@ -242,7 +264,7 @@ export function resolveModelMeta(cls: object): ModelMeta {
 			"Model class is not bound to an ORM. Create it through orm.model(table).",
 		);
 	}
-	const orm = runtime.__orm;
+	const orm = connectionOrm(runtime);
 	const tableMeta = orm.internalMeta(runtime.__table as never);
 	const casts: Record<string, ResolvedCast> = {};
 	for (const [column, spec] of Object.entries(runtime.casts ?? {})) {
@@ -365,6 +387,7 @@ export function normalizeAttribute(
 	const mutated = mutator === undefined ? value : mutator(value);
 	const cast = meta.casts[column];
 	if (cast === undefined) return mutated;
+	if (cast.decorate === true) return cast.set(mutated);
 	return cast.get(cast.set(mutated));
 }
 
@@ -481,10 +504,13 @@ export class Model<
 
 	/** Reads an attribute (typed from the schema). */
 	get<C extends ColumnNameOf<S, T>>(column: C): RowOf<S, T>[C] {
-		const accessor = resolveModelMeta(this.constructor as object).accessors[
-			column as string
-		];
+		const meta = resolveModelMeta(this.constructor as object);
+		const accessor = meta.accessors[column as string];
 		if (accessor !== undefined) return accessor(this) as RowOf<S, T>[C];
+		const cast = meta.casts[column as string];
+		if (cast?.decorate === true) {
+			return cast.get(this.#attributes[column]) as RowOf<S, T>[C];
+		}
 		return this.#attributes[column] as RowOf<S, T>[C];
 	}
 
@@ -1437,7 +1463,7 @@ export class Model<
 			unknown,
 			null,
 			never
-		>(this.__orm, this.__table as TableName<Schema>, this);
+		>(connectionOrm(this), this.__table as TableName<Schema>, this);
 	}
 
 	/** Registers an event listener on this model class. */
@@ -1503,7 +1529,7 @@ export class Model<
 			unknown,
 			null,
 			never
-		>(this.__orm, this.__table as TableName<Schema>, this, {
+		>(connectionOrm(this), this.__table as TableName<Schema>, this, {
 			skipGlobalScopes: names.length === 0,
 			exceptGlobalScopes: names,
 		});
@@ -1671,6 +1697,159 @@ export class Model<
 			if (await model.delete()) deleted += 1;
 		}
 		return deleted;
+	}
+
+	/**
+	 * Deletes prunable rows in chunks (Eloquent's `Model::prune()`).
+	 *
+	 * ```ts
+	 * class Session extends orm.model("sessions") {
+	 *   static prunable = (query: unknown) =>
+	 *     (query as { where(column: string, op: string, value: unknown): void })
+	 *       .where("lastSeenAt", "<", new Date(Date.now() - 86_400_000));
+	 * }
+	 * const deleted = await Session.prune();       // 1000 rows per chunk
+	 * const all = await Session.prune(50);
+	 * ```
+	 *
+	 * The `prunable` callback narrows the query; the chunk is loaded, then
+	 * deleted by primary key so soft-deleting models are trashed rather than
+	 * destroyed. Returns the total number of deleted models.
+	 */
+	static async prune(this: ModelStaticLike, limit = 1000): Promise<number> {
+		if (!Number.isInteger(limit) || limit < 1) {
+			throw new InvalidQueryError(
+				`prune() on "${this.__table}": the chunk size must be a positive integer, got ${limit}.`,
+			);
+		}
+		const meta = resolveModelMeta(this);
+		const configure = this.prunable;
+		if (typeof configure !== "function") {
+			throw new InvalidModelUsageError(
+				`prune() on "${meta.table}": declare \`static prunable = (query) => …\` on the model first.`,
+			);
+		}
+		const primaryKey = meta.primaryKey;
+		if (primaryKey === null) {
+			throw new InvalidQueryError(
+				`prune() on "${meta.table}": the table declares no primary key.`,
+			);
+		}
+		const queryable = this as unknown as {
+			query(): QueryBuilder<
+				Schema,
+				TableName<Schema>,
+				ModelStaticLike,
+				unknown,
+				null,
+				never
+			>;
+		};
+		let total = 0;
+		for (;;) {
+			const probe = queryable.query();
+			configure(probe);
+			(probe as unknown as { limit(value: number): unknown }).limit(limit);
+			const chunk = (await probe.get()).all() as AnyModel[];
+			if (chunk.length === 0) break;
+			const ids = chunk.map(
+				(model) => internalsOf(model).attributes()[primaryKey],
+			);
+			const deleted = await (
+				queryable.query() as unknown as {
+					whereIn(
+						column: string,
+						values: unknown[],
+					): {
+						delete(): Promise<number>;
+					};
+				}
+			)
+				.whereIn(primaryKey, ids)
+				.delete();
+			total += Number(deleted);
+			if (chunk.length < limit) break;
+		}
+		return total;
+	}
+
+	/**
+	 * Creates a fluent factory for this model (Eloquent's `Model::factory()`).
+	 *
+	 * ```ts
+	 * const users = await User.factory()
+	 *   .define({ email: (index) => `user${index}@example.com` })
+	 *   .count(2)
+	 *   .create();
+	 * ```
+	 */
+	static factory(
+		this: ModelStaticLike,
+	): Factory<Schema, TableName<Schema>, AnyModel> {
+		return new Factory<Schema, TableName<Schema>, AnyModel>({
+			make: (values) => {
+				const instance = newInstance(this);
+				internalsOf(instance).assign(
+					prepareAssignment(values, resolveModelMeta(this), "create"),
+				);
+				return instance;
+			},
+			create: async (values) => {
+				const created = (
+					this as unknown as {
+						create(values: Record<string, unknown>): Promise<AnyModel>;
+					}
+				).create(values);
+				return created;
+			},
+		});
+	}
+
+	/**
+	 * Registers an instance method on this model class (Eloquent's
+	 * `Model::macro`). The implementation runs with `this` bound to the
+	 * instance.
+	 *
+	 * ```ts
+	 * class User extends orm.model("users") {}
+	 * User.macro("isAdmin", function (this: User) {
+	 *   return this.get("role") === "admin";
+	 * });
+	 * ```
+	 */
+	static macro(
+		this: ModelStaticLike,
+		name: string,
+		implementation: (model: never, ...args: never[]) => unknown,
+	): void {
+		if (typeof name !== "string" || name.length === 0) {
+			throw new InvalidModelUsageError(
+				"macro(): the method name must be a non-empty string.",
+			);
+		}
+		if (typeof implementation !== "function") {
+			throw new InvalidModelUsageError(
+				`macro(${JSON.stringify(name)}): the implementation must be a function.`,
+			);
+		}
+		const prototype = (this as { prototype?: Record<string, unknown> })
+			.prototype;
+		if (prototype === undefined) {
+			throw new InvalidModelUsageError(
+				`macro(${JSON.stringify(name)}): this class cannot carry prototype methods.`,
+			);
+		}
+		if (name in prototype) {
+			throw new InvalidModelUsageError(
+				`macro(${JSON.stringify(name)}): "${name}" already exists on the model.`,
+			);
+		}
+		Object.defineProperty(prototype, name, {
+			value: implementation,
+			writable: true,
+			configurable: true,
+			enumerable: false,
+		});
 	}
 
 	static async find(
@@ -2016,6 +2195,27 @@ export interface ModelStatics<S extends Schema, T extends TableName<S>> {
 			PrimaryKeyValueOf<S, T> | ReadonlyArray<PrimaryKeyValueOf<S, T>>
 		>
 	): Promise<number>;
+	/**
+	 * Deletes prunable rows in chunks (`static prunable` narrows the query);
+	 * returns the number of deleted models.
+	 */
+	prune<M extends ModelClass<S, T>>(this: M, limit?: number): Promise<number>;
+	/** Fluent factory (see `Factory`). */
+	factory<M extends ModelClass<S, T>>(
+		this: M,
+	): Factory<S, T, WithAccessors<M, InstanceType<M>>>;
+	/**
+	 * Registers an instance method on this model class (Eloquent's
+	 * `Model::macro`). The implementation receives the instance as `this`.
+	 */
+	macro<M extends ModelClass<S, T>>(
+		this: M,
+		name: string,
+		implementation: (
+			this: WithAccessors<M, InstanceType<M>>,
+			...args: never[]
+		) => unknown,
+	): void;
 	/** Finds one model by primary key. */
 	find<M extends ModelClass<S, T>>(
 		this: M,

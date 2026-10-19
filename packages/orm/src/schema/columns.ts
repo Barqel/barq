@@ -16,8 +16,12 @@
 export type ColumnType =
 	| "string"
 	| "text"
+	| "char"
 	| "integer"
 	| "bigint"
+	| "tinyint"
+	| "smallint"
+	| "mediumint"
 	| "float"
 	| "double"
 	| "decimal"
@@ -25,6 +29,7 @@ export type ColumnType =
 	| "date"
 	| "datetime"
 	| "json"
+	| "jsonb"
 	| "uuid"
 	| "binary";
 
@@ -68,8 +73,12 @@ export type Schema = Record<string, ColumnMap>;
 export interface ColumnTypeMap {
 	string: string;
 	text: string;
+	char: string;
 	integer: number;
 	bigint: number;
+	tinyint: number;
+	smallint: number;
+	mediumint: number;
 	float: number;
 	double: number;
 	decimal: string;
@@ -77,6 +86,7 @@ export interface ColumnTypeMap {
 	date: Date;
 	datetime: Date;
 	json: unknown;
+	jsonb: unknown;
 	uuid: string;
 	binary: Uint8Array;
 }
@@ -169,8 +179,12 @@ export type UpdateRowFor<C extends ColumnMap> = {
 const KNOWN_COLUMN_TYPES = new Set<string>([
 	"string",
 	"text",
+	"char",
 	"integer",
 	"bigint",
+	"tinyint",
+	"smallint",
+	"mediumint",
 	"float",
 	"double",
 	"decimal",
@@ -178,11 +192,18 @@ const KNOWN_COLUMN_TYPES = new Set<string>([
 	"date",
 	"datetime",
 	"json",
+	"jsonb",
 	"uuid",
 	"binary",
 ]);
 
-const INTEGER_TYPES = new Set<string>(["integer", "bigint"]);
+const INTEGER_TYPES = new Set<string>([
+	"integer",
+	"bigint",
+	"tinyint",
+	"smallint",
+	"mediumint",
+]);
 
 /**
  * Expands a column shorthand into a full, validated definition.

@@ -15,13 +15,17 @@ import {
 	hasMany,
 	hasManyThrough,
 	hasOne,
+	InvalidQueryError,
 	latestOfMany,
+	type MigrationContext,
 	Migrator,
 	morphedByMany,
 	morphMany,
 	morphTo,
 	morphToMany,
 	Orm,
+	runSeeders,
+	SchemaError,
 	UniqueConstraintError,
 	withDefault,
 } from "../../src/index";
@@ -105,6 +109,20 @@ export function runDialectSuite(
 				note: { type: "string", nullable: true },
 				createdAt: { type: "datetime", nullable: true },
 				updatedAt: { type: "datetime", nullable: true },
+			},
+			priorityWidgets: {
+				id: { type: "integer", primaryKey: true, autoIncrement: true },
+				code: { type: "char", length: 12 },
+				flags: { type: "tinyint", nullable: true },
+				rank: { type: "smallint", nullable: true },
+				size: { type: "mediumint", nullable: true },
+				payload: { type: "jsonb", nullable: true },
+				userId: { type: "bigint", nullable: true },
+			},
+			prioritySessions: {
+				id: { type: "integer", primaryKey: true, autoIncrement: true },
+				token: "string",
+				expiresAt: { type: "datetime" },
 			},
 		});
 
@@ -237,8 +255,44 @@ export function runDialectSuite(
 			static appends = ["displayName"] as const;
 		}
 
+		class Widget extends orm.model("priorityWidgets") {}
+
+		/** Priority-2 pruning candidate (`prunable` constraint + chunked delete). */
+		class ExpiredSession extends orm.model("prioritySessions") {
+			static prunable = (query: unknown) => {
+				(
+					query as {
+						where(column: string, operator: string, value: unknown): unknown;
+					}
+				).where("expiresAt", "<", new Date("2026-01-01T00:00:00Z"));
+			};
+		}
+
+		/** Custom pivot model (`using`) with a parameterized date cast. */
+		class Membership extends orm.pivot("role_user") {
+			static override casts = {
+				note: "string",
+				createdAt: "date:Y-m-d",
+			} as const;
+		}
+
+		class PivotUser extends orm.model("users") {
+			static relations = {
+				roles: belongsToMany(() => Role, {
+					through: "role_user",
+					foreignPivotKey: "userId",
+					relatedPivotKey: "roleId",
+					withPivot: ["note", "createdAt"],
+					using: Membership,
+				}),
+			};
+			static fillable = ["name", "email"] as const;
+		}
+
 		beforeAll(async () => {
 			const ddl = orm.schemaBuilder();
+			await ddl.dropIfExists("prioritySessions");
+			await ddl.dropIfExists("priorityWidgets");
 			await ddl.dropIfExists("taggables");
 			await ddl.dropIfExists("role_user");
 			await ddl.dropIfExists("roles");
@@ -318,6 +372,21 @@ export function runDialectSuite(
 				t.string("note", 200).nullable();
 				t.datetime("createdAt").nullable();
 				t.datetime("updatedAt").nullable();
+			});
+			await ddl.create("priorityWidgets", (t) => {
+				t.id();
+				t.char("code", 12);
+				t.unique("code", "p2_code_unique");
+				t.tinyInteger("flags").unsigned().default(0);
+				t.smallInteger("rank").unsigned().nullable();
+				t.mediumInteger("size").unsigned().nullable();
+				t.jsonb("payload").nullable();
+				t.bigint("userId").nullable().references("users.id");
+			});
+			await ddl.create("prioritySessions", (t) => {
+				t.id();
+				t.string("token", 60);
+				t.datetime("expiresAt");
 			});
 		});
 
@@ -1077,6 +1146,451 @@ export function runDialectSuite(
 
 			const matched = await Tag.query().whereHas("posts").get();
 			expect(matched.map((item) => item.get("id")).all()).toContain(tagId);
+		});
+
+		// -------------------------------------------------------------------
+		// Priority 2: casts, schema extras, pruning, factories, JSON extras,
+		// morph/attached constraints and custom pivots on live servers.
+		// -------------------------------------------------------------------
+
+		describe("priority 2 parity", () => {
+			const place = (position: number): string => options.placeholder(position);
+
+			async function columnNames(table: string): Promise<string[]> {
+				if (orm.dialectKind === "sqlite") {
+					const result = await orm.raw(`pragma table_info('${table}')`);
+					return result.rows.map((row) => String(row.name));
+				}
+				const sql =
+					orm.dialectKind === "mysql"
+						? `select column_name as name from information_schema.columns where table_schema = database() and table_name = ${place(1)} order by ordinal_position`
+						: `select column_name as name from information_schema.columns where table_schema = current_schema() and table_name = ${place(1)} order by ordinal_position`;
+				const result = await orm.raw(sql, [table]);
+				return result.rows.map((row) => String(row.name));
+			}
+
+			async function foreignKeyNames(
+				table: string,
+				referenced: string,
+			): Promise<string[]> {
+				if (orm.dialectKind === "sqlite") {
+					const result = await orm.raw(`pragma foreign_key_list('${table}')`);
+					return result.rows
+						.filter((row) => String(row.table) === referenced)
+						.map((row) => String(row.id));
+				}
+				const sql =
+					orm.dialectKind === "mysql"
+						? `select constraint_name as name from information_schema.key_column_usage where table_schema = database() and table_name = ${place(1)} and referenced_table_name = ${place(2)}`
+						: `select c.conname as name from pg_constraint c join pg_class t on t.oid = c.conrelid join pg_namespace n on n.oid = t.relnamespace join pg_class r on r.oid = c.confrelid where n.nspname = current_schema() and t.relname = ${place(1)} and r.relname = ${place(2)} and c.contype = 'f'`;
+				const result = await orm.raw(sql, [table, referenced]);
+				return result.rows.map((row) => String(row.name));
+			}
+
+			test("blueprint extras: char, sized ints, jsonb, unsigned and foreign keys", async () => {
+				const inserted = await orm.table("priorityWidgets").insert({
+					code: "abc-123",
+					flags: 1,
+					rank: 5,
+					size: 1000,
+					payload: JSON.stringify({ nested: [1, 2] }),
+				});
+				expect(typeof inserted.id).toBe("number");
+				const row = await orm
+					.table("priorityWidgets")
+					.where("code", "abc-123")
+					.firstOrFail();
+				expect(String(row.code).trim()).toBe("abc-123");
+				expect(Number(row.flags)).toBe(1);
+				expect(Number(row.rank)).toBe(5);
+				expect(Number(row.size)).toBe(1000);
+				const payload =
+					typeof row.payload === "string"
+						? JSON.parse(row.payload)
+						: row.payload;
+				expect(payload).toEqual({ nested: [1, 2] });
+
+				// The unique index on `code` is live on both engines.
+				await expect(
+					orm.table("priorityWidgets").insert({ code: "abc-123" }),
+				).rejects.toThrow(UniqueConstraintError);
+			});
+
+			test("alter: add/rename/drop columns, dropUnique, dropForeign", async () => {
+				const ddl = orm.schemaBuilder();
+				await ddl.alter("priorityWidgets", (t) => {
+					t.string("extra", 40).nullable();
+				});
+				expect(await columnNames("priorityWidgets")).toContain("extra");
+
+				await ddl.alter("priorityWidgets", (t) => {
+					t.renameColumn("extra", "renamed");
+				});
+				const renamed = await columnNames("priorityWidgets");
+				expect(renamed).toContain("renamed");
+				expect(renamed).not.toContain("extra");
+
+				await ddl.alter("priorityWidgets", (t) => {
+					t.dropColumn(["renamed"]);
+				});
+				expect(await columnNames("priorityWidgets")).not.toContain("renamed");
+
+				if (orm.dialectKind === "sqlite") {
+					// SQLite cannot drop inline/unique constraints.
+					await expect(
+						ddl.alter("priorityWidgets", (t) => {
+							t.dropUnique("p2_code_unique");
+						}),
+					).rejects.toThrow(SchemaError);
+					await expect(
+						orm.table("priorityWidgets").insert({ code: "abc-123" }),
+					).rejects.toThrow(UniqueConstraintError);
+				} else {
+					// dropUnique: the named unique index disappears and
+					// duplicate values become acceptable.
+					await ddl.alter("priorityWidgets", (t) => {
+						t.dropUnique("p2_code_unique");
+					});
+					const duplicate = await orm
+						.table("priorityWidgets")
+						.insert({ code: "abc-123", flags: 2 });
+					expect(typeof duplicate.id).toBe("number");
+				}
+
+				const names = await foreignKeyNames("priorityWidgets", "users");
+				expect(names.length).toBe(1);
+				if (orm.dialectKind === "sqlite") {
+					await expect(
+						ddl.alter("priorityWidgets", (t) => {
+							// SQLite cannot drop constraints; a syntactically
+							// valid name is enough to reach that guard.
+							t.dropForeign("priorityWidgets_userId_foreign");
+						}),
+					).rejects.toThrow(SchemaError);
+				} else {
+					// dropForeign: the FK constraint disappears and orphan
+					// values become acceptable.
+					await expect(
+						orm
+							.table("priorityWidgets")
+							.insert({ code: "fk-before", userId: 987654321 }),
+					).rejects.toThrow();
+					await ddl.alter("priorityWidgets", (t) => {
+						t.dropForeign(names[0] as string);
+					});
+					const orphan = await orm
+						.table("priorityWidgets")
+						.insert({ code: "fk-after", userId: 987654321 });
+					expect(typeof orphan.id).toBe("number");
+					expect(await foreignKeyNames("priorityWidgets", "users")).toEqual([]);
+				}
+			});
+
+			test("json extras: paths, keys, length and overlaps", async () => {
+				await orm.table("users").insertMany([
+					{
+						name: "p2-json-a",
+						email: "p2-json-a@example.com",
+						settings: JSON.stringify({
+							tags: ["vip", "beta"],
+							profile: { tier: "gold" },
+						}),
+					},
+					{
+						name: "p2-json-b",
+						email: "p2-json-b@example.com",
+						settings: JSON.stringify({
+							tags: ["basic"],
+							profile: { tier: "silver" },
+						}),
+					},
+					{
+						name: "p2-json-c",
+						email: "p2-json-c@example.com",
+						settings: JSON.stringify({ color: "red", vip: true }),
+					},
+				]);
+
+				const byElement = await orm
+					.table("users")
+					.whereJsonContains("settings", "vip", "$.tags")
+					.where("name", "=", "p2-json-a")
+					.get();
+				expect(byElement.count()).toBe(1);
+
+				const byObject = await orm
+					.table("users")
+					.whereJsonContains("settings", { tier: "gold" }, "$.profile")
+					.where("name", "=", "p2-json-a")
+					.get();
+				expect(byObject.count()).toBe(1);
+
+				const withKey = await orm
+					.table("users")
+					.whereJsonContainsKey("settings", "$.profile.tier")
+					.where("email", "like", "p2-json-%")
+					.get();
+				expect(withKey.count()).toBe(2);
+
+				const withoutKey = await orm
+					.table("users")
+					.whereJsonDoesntContainKey("settings", "$.profile.tier")
+					.where("email", "like", "p2-json-%")
+					.get();
+				expect(withoutKey.count()).toBe(1);
+				expect(withoutKey.first()?.name).toBe("p2-json-c");
+
+				const byLength = await orm
+					.table("users")
+					.whereJsonLength("settings", ">=", 2, "$.tags")
+					.where("email", "like", "p2-json-%")
+					.get();
+				expect(byLength.count()).toBe(1);
+				expect(byLength.first()?.name).toBe("p2-json-a");
+
+				if (orm.dialectKind === "sqlite") {
+					// SQLite has no JSON overlap operator.
+					expect(() =>
+						orm.table("users").whereJsonOverlaps("settings", { vip: true }),
+					).toThrow(InvalidQueryError);
+				} else {
+					const overlaps = await orm
+						.table("users")
+						.whereJsonOverlaps("settings", { vip: true })
+						.where("email", "like", "p2-json-%")
+						.get();
+					expect(overlaps.count()).toBe(1);
+					expect(overlaps.first()?.name).toBe("p2-json-c");
+				}
+			});
+
+			test("whereMorphedTo / whereAttachedTo follow every relation kind", async () => {
+				const owner = await User.create({
+					name: "p2-morph-owner",
+					email: "p2-morph-owner@example.com",
+				});
+				const ownerId = owner.get("id") as number;
+				const post = await Post.create({
+					userId: ownerId,
+					title: "p2 morph post",
+				});
+				const postId = post.get("id") as number;
+				await Comment.create({
+					body: "p2 comment post",
+					commentableId: postId,
+					commentableType: "posts",
+				});
+				await Comment.create({
+					body: "p2 comment user",
+					commentableId: ownerId,
+					commentableType: "users",
+				});
+
+				const byInstance = await Comment.query()
+					.where("body", "like", "p2 comment%")
+					.whereMorphedTo("commentable", post)
+					.get();
+				expect(byInstance.map((c) => c.get("body")).all()).toEqual([
+					"p2 comment post",
+				]);
+
+				const byClass = await Comment.query()
+					.where("body", "like", "p2 comment%")
+					.whereMorphedTo("commentable", Post)
+					.get();
+				expect(byClass.map((c) => c.get("body")).all()).toEqual([
+					"p2 comment post",
+				]);
+
+				const byAlias = await Comment.query()
+					.where("body", "like", "p2 comment%")
+					.whereMorphedTo("commentable", "users")
+					.get();
+				expect(byAlias.map((c) => c.get("body")).all()).toEqual([
+					"p2 comment user",
+				]);
+
+				const complement = await Comment.query()
+					.where("body", "like", "p2 comment%")
+					.whereNotMorphedTo("commentable", post)
+					.get();
+				expect(complement.map((c) => c.get("body")).all()).toEqual([
+					"p2 comment user",
+				]);
+
+				// belongsTo: Post -> User
+				const ownerPosts = await Post.query().whereAttachedTo(owner).get();
+				expect(ownerPosts.map((p) => p.get("id")).all()).toEqual([postId]);
+
+				// hasMany: User -> Post
+				const postOwners = await User.query().whereAttachedTo(post).get();
+				expect(postOwners.map((u) => u.get("id")).all()).toEqual([ownerId]);
+
+				// morphTo: Comment -> Post
+				const comments = await Comment.query()
+					.where("body", "like", "p2 comment%")
+					.whereAttachedTo(post)
+					.get();
+				expect(comments.map((c) => c.get("body")).all()).toEqual([
+					"p2 comment post",
+				]);
+
+				// belongsToMany: User -> Role through the pivot table
+				const role = await Role.create({ name: "p2-morph-role" });
+				const roleId = role.get("id") as number;
+				await owner.relation("roles").attach(roleId, { note: "p2" });
+				const roleHolders = await User.query().whereAttachedTo(role).get();
+				expect(roleHolders.map((u) => u.get("id")).all()).toContain(ownerId);
+				const strangers = await User.query().whereNotAttachedTo(role).get();
+				expect(strangers.map((u) => u.get("id")).all()).not.toContain(ownerId);
+			});
+
+			test("custom pivot models apply casts on attach and eager loads", async () => {
+				const user = await PivotUser.create({
+					name: "p2-pivot",
+					email: "p2-pivot@example.com",
+				});
+				const userId = user.get("id") as number;
+				const role = await Role.create({ name: "p2-pivot-role" });
+				const roleId = role.get("id") as number;
+				await user.relation("roles").attach(roleId, {
+					note: "p2-note",
+					createdAt: new Date(2026, 3, 1),
+				});
+
+				// `date:Y-m-d` formatted the Date before it reached the engine.
+				const selectFormatted =
+					orm.dialectKind === "mysql"
+						? `select date_format(\`createdAt\`, '%Y-%m-%d') as formatted from role_user where \`userId\` = ${place(1)} and \`roleId\` = ${place(2)}`
+						: orm.dialectKind === "postgres"
+							? `select to_char("createdAt", 'YYYY-MM-DD') as formatted from role_user where "userId" = ${place(1)} and "roleId" = ${place(2)}`
+							: `select strftime('%Y-%m-%d', "createdAt") as formatted from role_user where "userId" = ${place(1)} and "roleId" = ${place(2)}`;
+				const raw = await orm.raw(selectFormatted, [userId, roleId]);
+				expect(String(raw.rows[0]?.formatted)).toBe("2026-04-01");
+
+				const loaded = await PivotUser.query()
+					.with("roles")
+					.where("id", userId)
+					.firstOrFail();
+				const pivot = loaded.roles.first()?.pivot as Membership;
+				expect(pivot).toBeInstanceOf(Membership);
+				expect(pivot.get("note")).toBe("p2-note");
+				expect(pivot.get("createdAt")).toBe("2026-04-01");
+			});
+
+			test("factories, seeders and pruning", async () => {
+				const created = await User.factory()
+					.define({
+						email: (index) => `p2-factory${index}@example.com`,
+						name: (index) => `P2 Factory ${index}`,
+					})
+					.count(2)
+					.create({ age: 20 });
+				expect(created.count()).toBe(2);
+				expect(created.all().every((user) => user.get("age") === 20)).toBe(
+					true,
+				);
+				expect(
+					await orm
+						.table("users")
+						.where("email", "like", "p2-factory%@example.com")
+						.count(),
+				).toBe(2);
+
+				let seeded = 0;
+				await runSeeders(orm, [
+					async () => {
+						seeded += 1;
+						await orm.table("countries").insert({ name: "p2-seeded" });
+					},
+					{
+						run: async () => {
+							seeded += 1;
+						},
+					},
+				]);
+				expect(seeded).toBe(2);
+
+				await orm.table("prioritySessions").insert([
+					{ token: "p2-a", expiresAt: new Date("2025-01-01T00:00:00Z") },
+					{ token: "p2-b", expiresAt: new Date("2025-06-01T00:00:00Z") },
+					{ token: "p2-c", expiresAt: new Date("2027-01-01T00:00:00Z") },
+				]);
+				const deleted = await ExpiredSession.prune(2);
+				expect(deleted).toBe(2);
+				expect(await ExpiredSession.query().count()).toBe(1);
+			});
+
+			test("migrator: pretend, migrate, reset and refresh", async () => {
+				const ddl = orm.schemaBuilder();
+				await ddl.dropIfExists("p2_things");
+				await ddl.dropIfExists("p2_migrations");
+				const migrator = new Migrator(orm, {
+					table: "p2_migrations",
+					migrations: [
+						{
+							name: "0001_create_p2_things",
+							async up({
+								schema: schemaBuilder,
+							}: MigrationContext<typeof schema>) {
+								await schemaBuilder.create("p2_things", (t) => {
+									t.id();
+									t.string("name", 60);
+								});
+							},
+							async down({
+								schema: schemaBuilder,
+							}: MigrationContext<typeof schema>) {
+								await schemaBuilder.drop("p2_things");
+							},
+						},
+					],
+				});
+
+				const plan = await migrator.pretend();
+				expect(plan.map((entry) => entry.migration)).toEqual([
+					"0001_create_p2_things",
+				]);
+				expect(plan[0]?.statements.join(" ")).toContain("p2_things");
+				const applied = await migrator.migrate();
+				expect(applied.applied).toEqual(["0001_create_p2_things"]);
+				expect(await ddl.hasTable("p2_things")).toBe(true);
+				expect(await migrator.pretend()).toEqual([]);
+				expect(await migrator.reset()).toEqual(["0001_create_p2_things"]);
+				expect(await ddl.hasTable("p2_things")).toBe(false);
+				const refreshed = await migrator.refresh();
+				expect(refreshed.applied).toEqual(["0001_create_p2_things"]);
+				expect(await ddl.hasTable("p2_things")).toBe(true);
+			});
+
+			// Destructive: drops every table in the database, so it runs last.
+			test("migrator.fresh drops every table and re-runs migrations", async () => {
+				const migrator = new Migrator(orm, {
+					table: "p2_migrations",
+					migrations: [
+						{
+							name: "0001_create_p2_things",
+							async up({
+								schema: schemaBuilder,
+							}: MigrationContext<typeof schema>) {
+								await schemaBuilder.create("p2_things", (t) => {
+									t.id();
+									t.string("name", 60);
+								});
+							},
+							async down({
+								schema: schemaBuilder,
+							}: MigrationContext<typeof schema>) {
+								await schemaBuilder.drop("p2_things");
+							},
+						},
+					],
+				});
+				const fresh = await migrator.fresh();
+				expect(fresh.applied).toEqual(["0001_create_p2_things"]);
+				expect(await orm.schemaBuilder().hasTable("p2_things")).toBe(true);
+				expect(await orm.schemaBuilder().hasTable("users")).toBe(false);
+			});
 		});
 	});
 }

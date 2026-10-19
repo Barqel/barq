@@ -842,3 +842,163 @@ void raw;
 // Positive: schema builder and migrator are available on the ORM.
 orm.schemaBuilder();
 new Migrator(orm, { migrations: [] });
+
+// ---------------------------------------------------------------------------
+// Priority 2: macros, pivot `using`, pruning, factories, new casts/types
+// ---------------------------------------------------------------------------
+
+// Query-builder macros augment the builder type and keep `this` chainable.
+declare module "../../src/query/builder" {
+	interface QueryBuilderMacros {
+		whereFeatured(): this;
+		whereOlderThan(age: number): this;
+	}
+}
+orm.macro("whereFeatured", (_query: never) => {
+	// runtime body is irrelevant to the type contract
+});
+orm.macro("whereOlderThan", (_query: never, _age: never) => {});
+User.query().whereFeatured().where("age", ">", 18);
+User.query().whereOlderThan(30).count();
+// @ts-expect-error — macro arguments are typed by the augmentation
+User.query().whereOlderThan("thirty");
+
+// Model macros register `this`-typed instance methods.
+User.macro("isAdult", function () {
+	return Number(this.get("age")) >= 18;
+});
+type MacroThis = ThisParameterType<Parameters<typeof User.macro>[1]>;
+type _MacroThis = Expect<MacroThis extends User ? true : false>;
+const macroUser = User.query().firstOrFail();
+macroUser.then((value) => {
+	const adult: boolean = (value as unknown as { isAdult(): boolean }).isAdult();
+	void adult;
+});
+// @ts-expect-error — undeclared macros are rejected
+User.macro(123, () => null);
+
+// Pruning is typed as a number-returning promise.
+const pruneAll: Promise<number> = User.prune();
+const pruneChunked: Promise<number> = User.prune(50);
+void [pruneAll, pruneChunked];
+// @ts-expect-error — the chunk size is a number
+User.prune("50");
+
+// Factories are typed from the schema (fillable filtering included).
+const factory = User.factory()
+	.define({
+		email: (index) => `user${index}@example.com`,
+		name: "Ada",
+	})
+	.state({ age: 30 })
+	.count(2);
+type WithAppends = User & { readonly displayName: string };
+const factoryMade: Collection<WithAppends> = factory.make();
+const factoryCreated: Promise<Collection<WithAppends>> = factory.create({
+	age: 41,
+});
+const factoryOne: Promise<WithAppends> = User.factory()
+	.define({ name: "Solo" })
+	.createOne();
+void [factoryMade, factoryCreated, factoryOne];
+// @ts-expect-error — `define` accepts only create values
+User.factory().define({ nope: true });
+
+// Custom pivot models: `using` types the hydrated pivot accessor.
+class Membership extends orm.pivot("role_user") {
+	static override casts = { note: "string" } as const;
+}
+class Org extends orm.model("users") {
+	static relations = {
+		roles: belongsToMany(() => Role, {
+			through: "role_user",
+			foreignPivotKey: "userId",
+			relatedPivotKey: "roleId",
+			withPivot: ["note"],
+			using: Membership,
+		}),
+		plainRoles: belongsToMany(() => Role, {
+			through: "role_user",
+			foreignPivotKey: "userId",
+			relatedPivotKey: "roleId",
+		}),
+	};
+}
+const loadedOrgPromise = Org.query().with("roles").firstOrFail();
+type LoadedOrg = Awaited<typeof loadedOrgPromise>;
+type PivotOf<C> =
+	C extends Collection<infer R>
+		? R extends { pivot: infer P }
+			? P
+			: never
+		: never;
+type OrgPivot = PivotOf<LoadedOrg["roles"]>;
+type _OrgPivot = Expect<SameShape<OrgPivot, Membership>>;
+const loadedOrgPlainPromise = Org.query().with("plainRoles").firstOrFail();
+type LoadedOrgPlain = Awaited<typeof loadedOrgPlainPromise>;
+type _OrgPlainPivot = Expect<
+	SameShape<PivotOf<LoadedOrgPlain["plainRoles"]>, Record<string, unknown>>
+>;
+
+// Parameterized and additional cast names typecheck.
+class CastedUser extends orm.model("users") {
+	static casts = {
+		age: "int",
+		email: "float",
+		name: "decimal:2",
+		deletedAt: "datetime:Y-m-d",
+		countryId: "immutable_date",
+		active: "object",
+	} as const;
+}
+type _CastNames = Expect<
+	SameShape<InstanceType<typeof CastedUser>, InstanceType<typeof User>>
+>;
+// Unknown cast names are rejected at runtime (`SchemaError`), not statically:
+// cast maps intentionally stay unconstrained so custom casts keep working.
+
+// New Blueprint column types exist on the schema surface.
+const typedSchema = defineSchema({
+	things: {
+		id: { type: "integer", primaryKey: true, autoIncrement: true },
+		code: { type: "char", length: 12 },
+		flags: { type: "tinyint", nullable: true },
+		size: { type: "mediumint", nullable: true },
+		payload: { type: "jsonb", nullable: true },
+	},
+});
+type ThingRow = RowOf<typeof typedSchema, "things">;
+const thing: ThingRow = {
+	id: 1,
+	code: "abc",
+	flags: 1,
+	size: 2,
+	payload: { any: "json" },
+};
+void thing;
+type ThingCode = ThingRow["code"];
+type _ThingCode = Expect<SameShape<ThingCode, string>>;
+// @ts-expect-error — `char` columns are strings
+const badCode: ThingCode = 5;
+void badCode;
+
+// Named connections are typed and cache their instances.
+const auditOrm: Orm<typeof schema> = orm.connection("audit");
+const connectionNames: string[] = orm.connectionNames();
+void [auditOrm, connectionNames];
+
+// JSON helpers accept deep paths; overlaps is a valid builder method.
+User.query().whereJsonContains("email", "x", "$.a.b");
+User.query().whereJsonContainsKey("email", "$.a");
+User.query().whereJsonDoesntContainKey("email", "a");
+User.query().whereJsonLength("email", ">=", 1, "$.tags");
+orm.table("tags").whereJsonOverlaps("name", ["a"]);
+// @ts-expect-error — the JSON path must be a string
+User.query().whereJsonContainsKey("email", 1);
+
+// whereMorphedTo / whereAttachedTo accept classes and instances.
+Comment.query().whereMorphedTo("commentable", Video);
+Comment.query().whereMorphedTo("commentable", "videos");
+Comment.query().whereNotMorphedTo("commentable", Post);
+Post.query().whereAttachedTo(new User(undefined as never));
+User.query().whereNotAttachedTo(Post, "posts");

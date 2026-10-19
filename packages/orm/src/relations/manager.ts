@@ -39,6 +39,7 @@ import {
 	type ModelLike,
 } from "./descriptors";
 import { ofManyPredicateSql } from "./of-many";
+import { preparePivotValues } from "./pivot";
 
 /** Minimal structural model surface used by relation managers. */
 interface ModelLikeStatic extends ModelLike {
@@ -852,6 +853,13 @@ export class RelationManager {
 		if (list.length === 0) return 0;
 		const pivot = this.#pivotInfo();
 		const rows = list.map((id) => this.#pivotValues(id, attributes));
+		const pivotClass = this.#descriptor().pivotClass;
+		const prepared =
+			pivotClass === undefined
+				? rows
+				: rows.map((row) =>
+						preparePivotValues(pivotClass, row, this.#ctx.orm.encryptionKey),
+					);
 		const executor = this.#ctx.orm.executor() as unknown as {
 			insertInto(table: string): {
 				values(values: unknown): {
@@ -861,7 +869,7 @@ export class RelationManager {
 		};
 		const compiled = executor
 			.insertInto(pivot.through)
-			.values(rows.length === 1 ? rows[0] : rows)
+			.values(prepared.length === 1 ? prepared[0] : prepared)
 			.compile();
 		const result = await this.#ctx.orm.execute(compiled as never);
 		return Number(result.numAffectedRows ?? rows.length);
@@ -993,10 +1001,20 @@ export class RelationManager {
 		};
 		// `timestamps` refreshes the pivot `updatedAt` unless the caller set it.
 		const timestamps = this.#descriptor().pivotTimestamps;
-		const values =
+		const rawValues =
 			timestamps === undefined || Object.hasOwn(attributes, timestamps[1])
 				? attributes
 				: { ...attributes, [timestamps[1]]: new Date() };
+		// Custom pivot models (`using`) prepare write values through casts.
+		const pivotClass = this.#descriptor().pivotClass;
+		const values =
+			pivotClass === undefined
+				? rawValues
+				: preparePivotValues(
+						pivotClass,
+						rawValues,
+						this.#ctx.orm.encryptionKey,
+					);
 		const updated = executor
 			.updateTable(pivot.through)
 			.set(values) as unknown as {

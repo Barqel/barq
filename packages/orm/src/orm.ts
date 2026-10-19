@@ -32,6 +32,7 @@ import { QueryBuilder } from "./query/builder";
 import { buildRowPlan, type RowPlan } from "./query/hydrate";
 import { type AnyRelations } from "./relations/descriptors";
 import { type EagerPath, eagerLoad } from "./relations/eager";
+import { createPivotBase, type PivotBase } from "./relations/pivot";
 import { SchemaBuilder } from "./schema/builder";
 import {
 	type ColumnMap,
@@ -100,6 +101,21 @@ export interface OrmConfig<S extends Schema> {
 	 * unreadable.
 	 */
 	encryptionKey?: string;
+	/**
+	 * Extra named connections (third argument of `orm.connection(name)`).
+	 * Each entry is a full dialect — same schema, separate driver.
+	 */
+	connections?: Readonly<Record<string, Dialect>>;
+	/** @internal Shared registries between an ORM and its connections. */
+	__shared?: OrmShared;
+}
+
+/** State shared between an ORM instance and its named connections. @internal */
+export interface OrmShared {
+	readonly listeners: Set<QueryListener>;
+	readonly morphAliasToModel: Map<string, MorphMapModel>;
+	readonly morphModelToAlias: Map<MorphMapModel, string>;
+	readonly macros: Map<string, (builder: never, ...args: never[]) => unknown>;
 }
 
 interface TransactionStore<S extends Schema> {
@@ -122,10 +138,12 @@ export class Orm<S extends Schema> {
 
 	readonly #db: OrmKysely<S>;
 	readonly #als = new AsyncLocalStorage<TransactionStore<S>>();
-	readonly #listeners = new Set<QueryListener>();
+	/** Statement capture used by `Migrator.pretend()`. */
+	readonly #capture = new AsyncLocalStorage<string[]>();
+	readonly #shared: OrmShared;
 	readonly #meta = new Map<string, TableMeta>();
-	readonly #morphAliasToModel = new Map<string, MorphMapModel>();
-	readonly #morphModelToAlias = new Map<MorphMapModel, string>();
+	readonly #connectionDialects: Readonly<Record<string, Dialect>>;
+	readonly #connections = new Map<string, Orm<S>>();
 
 	constructor(config: OrmConfig<S>) {
 		if (!config || typeof config !== "object" || !config.schema) {
@@ -140,7 +158,14 @@ export class Orm<S extends Schema> {
 		this.#db = createKysely<S>(config.dialect);
 		this.dialectKind = detectDialectKind(config.dialect);
 		this.encryptionKey = config.encryptionKey;
-		if (config.onQuery) this.#listeners.add(config.onQuery);
+		this.#shared = config.__shared ?? {
+			listeners: new Set(),
+			morphAliasToModel: new Map(),
+			morphModelToAlias: new Map(),
+			macros: new Map(),
+		};
+		this.#connectionDialects = config.connections ?? {};
+		if (config.onQuery) this.#shared.listeners.add(config.onQuery);
 	}
 
 	// -----------------------------------------------------------------------
@@ -149,10 +174,90 @@ export class Orm<S extends Schema> {
 
 	/** Registers a query listener — returns an unsubscribe function. */
 	onQuery(listener: QueryListener): () => void {
-		this.#listeners.add(listener);
+		this.#shared.listeners.add(listener);
 		return () => {
-			this.#listeners.delete(listener);
+			this.#shared.listeners.delete(listener);
 		};
+	}
+
+	/**
+	 * A named connection: same schema, different dialect/database. The
+	 * instance is cached, shares query listeners, morph map and macros with
+	 * this ORM, and supports the full surface (`table`, `model`, transactions,
+	 * schema builder, migrator).
+	 *
+	 * ```ts
+	 * const orm = new Orm({
+	 *   schema,
+	 *   dialect: sqlite("main.db"),
+	 *   connections: { audit: sqlite("audit.db") },
+	 * });
+	 * await orm.connection("audit").table("events").insert(values).run();
+	 * ```
+	 */
+	connection(name: string): Orm<S> {
+		if (name === "default") return this;
+		const dialect = this.#connectionDialects[name];
+		if (dialect === undefined) {
+			const known = ["default", ...Object.keys(this.#connectionDialects)];
+			throw new SchemaError(
+				`Unknown connection ${JSON.stringify(name)}. Configured connections: ${known.join(", ")}.`,
+			);
+		}
+		let child = this.#connections.get(name);
+		if (child === undefined) {
+			child = new Orm<S>({
+				schema: this.schema,
+				dialect,
+				encryptionKey: this.encryptionKey,
+				__shared: this.#shared,
+			});
+			this.#connections.set(name, child);
+		}
+		return child;
+	}
+
+	/** Names of every configured connection (`"default"` first). */
+	connectionNames(): string[] {
+		return ["default", ...Object.keys(this.#connectionDialects)];
+	}
+
+	/**
+	 * Registers a macro on the query builder (Eloquent's `Builder::macro`).
+	 * The implementation runs with `this` bound to the builder and receives
+	 * the builder as its first argument.
+	 *
+	 * ```ts
+	 * orm.macro("whereActive", (query) => query.where("active", "=", true));
+	 * const rows = await orm.table("users").whereActive().get();
+	 * ```
+	 */
+	macro(
+		name: string,
+		implementation: (builder: never, ...args: never[]) => unknown,
+	): this {
+		if (typeof name !== "string" || name.length === 0) {
+			throw new SchemaError("macro(): the name must be a non-empty string.");
+		}
+		if (typeof implementation !== "function") {
+			throw new SchemaError(
+				`macro(${JSON.stringify(name)}): the implementation must be a function.`,
+			);
+		}
+		this.#shared.macros.set(name, implementation);
+		return this;
+	}
+
+	/** Registered macro names. */
+	macroNames(): string[] {
+		return [...this.#shared.macros.keys()];
+	}
+
+	/** Implementation of a registered macro. @internal */
+	macroImplementation(
+		name: string,
+	): ((builder: never, ...args: never[]) => unknown) | undefined {
+		return this.#shared.macros.get(name);
 	}
 
 	/**
@@ -176,11 +281,11 @@ export class Orm<S extends Schema> {
 					`morphMap(${JSON.stringify(alias)}): expected a model class with a __table.`,
 				);
 			}
-			const previousAlias = this.#morphModelToAlias.get(modelClass);
+			const previousAlias = this.#shared.morphModelToAlias.get(modelClass);
 			if (previousAlias !== undefined)
-				this.#morphAliasToModel.delete(previousAlias);
-			this.#morphAliasToModel.set(alias, modelClass);
-			this.#morphModelToAlias.set(modelClass, alias);
+				this.#shared.morphAliasToModel.delete(previousAlias);
+			this.#shared.morphAliasToModel.set(alias, modelClass);
+			this.#shared.morphModelToAlias.set(modelClass, alias);
 		}
 		return this;
 	}
@@ -192,19 +297,21 @@ export class Orm<S extends Schema> {
 	morphAlias(modelClass: unknown): string {
 		const cls = modelClass as { morphAlias?: unknown; __table?: unknown };
 		if (typeof cls.morphAlias === "string") return cls.morphAlias;
-		const registered = this.#morphModelToAlias.get(modelClass as MorphMapModel);
+		const registered = this.#shared.morphModelToAlias.get(
+			modelClass as MorphMapModel,
+		);
 		if (registered !== undefined) return registered;
 		return typeof cls.__table === "string" ? cls.__table : "";
 	}
 
 	/** Model class registered for a morph alias through `morphMap()`. */
 	morphClass(alias: string): MorphMapModel | undefined {
-		return this.#morphAliasToModel.get(alias);
+		return this.#shared.morphAliasToModel.get(alias);
 	}
 
 	/** Every `morphMap()` entry, in registration order. */
 	morphMapEntries(): ReadonlyArray<readonly [string, MorphMapModel]> {
-		return [...this.#morphAliasToModel.entries()];
+		return [...this.#shared.morphAliasToModel.entries()];
 	}
 
 	/** Lightweight row path: typed records, no model instantiation. */
@@ -217,6 +324,21 @@ export class Orm<S extends Schema> {
 	/** Creates a model base class bound to this ORM and table. */
 	model<T extends TableName<S>>(table: T): ModelClass<S, T> {
 		return createModelBase<S, T>(this, table);
+	}
+
+	/**
+	 * Creates a base class for a custom pivot model (Eloquent's `Pivot` +
+	 * `->using()`).
+	 *
+	 * ```ts
+	 * class Membership extends orm.pivot("role_user") {
+	 *   static casts = { note: "string" } as const;
+	 * }
+	 * const roles = belongsToMany(Role, { ..., using: Membership });
+	 * ```
+	 */
+	pivot(table: string): PivotBase {
+		return createPivotBase(table);
 	}
 
 	/** DDL access (create/alter/drop) for migrations. */
@@ -245,6 +367,11 @@ export class Orm<S extends Schema> {
 	async execute(
 		compiled: CompiledQuery,
 	): Promise<QueryResult<Record<string, unknown>>> {
+		const capture = this.#capture.getStore();
+		if (capture !== undefined) {
+			capture.push(compiled.sql);
+			return { rows: [] } as unknown as QueryResult<Record<string, unknown>>;
+		}
 		const startedAt = performance.now();
 		try {
 			return await this.executor().executeQuery<Record<string, unknown>>(
@@ -256,13 +383,13 @@ export class Orm<S extends Schema> {
 				parameters: compiled.parameters,
 			});
 		} finally {
-			if (this.#listeners.size > 0) {
+			if (this.#shared.listeners.size > 0) {
 				const event: QueryEvent = {
 					sql: compiled.sql,
 					parameters: compiled.parameters,
 					durationMs: performance.now() - startedAt,
 				};
-				for (const listener of this.#listeners) {
+				for (const listener of this.#shared.listeners) {
 					try {
 						listener(event);
 					} catch {
@@ -271,6 +398,19 @@ export class Orm<S extends Schema> {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Runs `callback` with statement execution disabled: every statement is
+	 * recorded (SQL text with placeholders) and skipped. Used by
+	 * `Migrator.pretend()`. @internal
+	 */
+	async captureStatements<T>(
+		callback: () => Promise<T> | T,
+	): Promise<{ result: T; statements: string[] }> {
+		const statements: string[] = [];
+		const result = await this.#capture.run(statements, async () => callback());
+		return { result, statements };
 	}
 
 	/** Executes a raw parameterized statement. */
@@ -368,13 +508,13 @@ export class Orm<S extends Schema> {
 					parameters: [],
 				});
 			} finally {
-				if (this.#listeners.size > 0) {
+				if (this.#shared.listeners.size > 0) {
 					const event: QueryEvent = {
 						sql: sqlText,
 						parameters: [],
 						durationMs: performance.now() - startedAt,
 					};
-					for (const listener of this.#listeners) {
+					for (const listener of this.#shared.listeners) {
 						try {
 							listener(event);
 						} catch {

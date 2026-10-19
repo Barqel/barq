@@ -31,6 +31,7 @@ export type {
 	MigrationContext,
 	MigrationStatus,
 	MigratorOptions,
+	PretendMigration,
 } from "./migrations/runner";
 // --- migrations -------------------------------------------------------------
 export { loadMigrations, Migrator } from "./migrations/runner";
@@ -43,12 +44,25 @@ export type {
 	EnumCast,
 	ResolvedCast,
 } from "./model/casts";
-export { verifyHashedValue } from "./model/casts";
+export {
+	isCastName,
+	KNOWN_CASTS,
+	parseCastName,
+	verifyHashedValue,
+} from "./model/casts";
 export type {
 	ModelEventListener,
 	ModelEventName,
 	ModelObserver,
 } from "./model/events";
+export type {
+	FactoryDefinition,
+	FactoryHandlers,
+	FactoryValue,
+	Seeder,
+	SeederLike,
+} from "./model/factory";
+export { defineSeeder, Factory, runSeeders } from "./model/factory";
 export type {
 	AnyModel,
 	GlobalScope,
@@ -74,6 +88,7 @@ export type {
 // --- kernel -----------------------------------------------------------------
 export { Orm } from "./orm";
 export type {
+	QueryBuilderMacros,
 	WhereHasCallback,
 	WithConstraints,
 } from "./query/builder";
@@ -161,6 +176,14 @@ export type {
 	RelationManagerOf,
 	RelationManagerRelationNames,
 } from "./relations/manager";
+export type {
+	PivotBase,
+	PivotClass,
+	PivotClassLike,
+	PivotLike,
+} from "./relations/pivot";
+// --- custom pivot models ----------------------------------------------------
+export { Pivot } from "./relations/pivot";
 export type {
 	ColumnSpec,
 	IndexSpec,

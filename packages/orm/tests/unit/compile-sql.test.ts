@@ -6,7 +6,7 @@
 // the statement text is emitted even when execution is a no-op.
 
 import { describe, expect, test } from "bun:test";
-import type { DialectKind, Orm, QueryEvent } from "../../src/index";
+import type { DialectKind, Orm, QueryEvent, Schema } from "../../src/index";
 import {
 	belongsTo,
 	belongsToMany,
@@ -15,6 +15,7 @@ import {
 	InvalidQueryError,
 	latestOfMany,
 	morphedByMany,
+	morphTo,
 	morphToMany,
 	SchemaError,
 } from "../../src/index";
@@ -40,6 +41,8 @@ const schema = defineSchema({
 		id: { type: "integer", primaryKey: true, autoIncrement: true },
 		postId: "integer",
 		body: "string",
+		commentableId: { type: "integer", nullable: true },
+		commentableType: { type: "string", nullable: true },
 	},
 	roles: {
 		id: { type: "integer", primaryKey: true, autoIncrement: true },
@@ -109,8 +112,8 @@ function setup(kind: DialectKind) {
 	return { orm, UserModel, PostModel, SoftPostModel, RoleModel, TagModel };
 }
 
-async function capture(
-	orm: Orm<typeof schema>,
+async function capture<S extends Schema>(
+	orm: Orm<S>,
 	run: () => Promise<unknown>,
 ): Promise<QueryEvent> {
 	const events: QueryEvent[] = [];
@@ -667,5 +670,233 @@ describe("Priority-1 parity SQL generation", () => {
 		expect(orm.morphClass("labels")).toBeUndefined();
 		expect(orm.morphMapEntries().map(([alias]) => alias)).toEqual(["tags"]);
 		expect(() => orm.morphMap({ "": TagModel })).toThrow(SchemaError);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Priority-2 additions: JSON paths, morph/attached constraints, new DDL types
+// ---------------------------------------------------------------------------
+
+describe("priority-2 SQL generation", () => {
+	const ddlSchema = defineSchema({
+		widgets: {
+			id: { type: "integer", primaryKey: true, autoIncrement: true },
+			code: { type: "char", length: 12 },
+			flags: { type: "tinyint", nullable: true },
+			rank: { type: "smallint", nullable: true },
+			size: { type: "mediumint", nullable: true },
+			payload: { type: "jsonb", nullable: true },
+		},
+	});
+
+	test("whereJsonContains path per dialect", () => {
+		const sqlite = compileOnlyOrm(schema, "sqlite")
+			.table("users")
+			.whereJsonContains("name", "x", "$.a.b")
+			.toSQL();
+		expect(normalize(sqlite.sql)).toContain('json_extract("name", ?)');
+		expect(sqlite.parameters).toEqual(["$.a.b", "x"]);
+
+		const mysql = compileOnlyOrm(schema, "mysql")
+			.table("users")
+			.whereJsonContains("name", "x", "$.a.b")
+			.toSQL();
+		expect(normalize(mysql.sql)).toContain(
+			"json_contains(json_extract(`name`, ?), ?)",
+		);
+		expect(mysql.parameters).toEqual(["$.a.b", '"x"']);
+
+		const postgres = compileOnlyOrm(schema, "postgres")
+			.table("users")
+			.whereJsonContains("name", "x", "$.a.b")
+			.toSQL();
+		expect(normalize(postgres.sql)).toContain('("name" #> $1) @> $2::jsonb');
+		expect(postgres.parameters).toEqual(["{a,b}", '"x"']);
+	});
+
+	test("containsKey / doesntContainKey per dialect", () => {
+		const sqlite = compileOnlyOrm(schema, "sqlite")
+			.table("users")
+			.whereJsonContainsKey("name", "$.a")
+			.whereJsonDoesntContainKey("email", "b.c")
+			.toSQL();
+		expect(normalize(sqlite.sql)).toContain('json_type("name", ?) is not null');
+		expect(normalize(sqlite.sql)).toContain('json_type("email", ?) is null');
+		expect(sqlite.parameters).toEqual(["$.a", "$.b.c"]);
+
+		const mysql = compileOnlyOrm(schema, "mysql")
+			.table("users")
+			.whereJsonContainsKey("name", "$.a")
+			.toSQL();
+		expect(normalize(mysql.sql)).toContain(
+			"json_contains_path(`name`, 'one', ?)",
+		);
+
+		const postgres = compileOnlyOrm(schema, "postgres")
+			.table("users")
+			.whereJsonDoesntContainKey("name", "$.a.b")
+			.toSQL();
+		expect(normalize(postgres.sql)).toContain(
+			'(("name")::jsonb #> $1::text[]) is null',
+		);
+		expect(postgres.parameters).toEqual(["{a,b}"]);
+	});
+
+	test("whereJsonOverlaps per dialect (SQLite throws)", () => {
+		const mysql = compileOnlyOrm(schema, "mysql")
+			.table("users")
+			.whereJsonOverlaps("name", ["a"])
+			.toSQL();
+		expect(normalize(mysql.sql)).toContain("json_overlaps(`name`, ?)");
+
+		const postgres = compileOnlyOrm(schema, "postgres")
+			.table("users")
+			.whereJsonOverlaps("name", ["a"])
+			.toSQL();
+		expect(normalize(postgres.sql)).toContain(
+			'(("name")::jsonb @> $1::jsonb or ("name")::jsonb <@ $2::jsonb)',
+		);
+
+		expect(() =>
+			compileOnlyOrm(schema, "sqlite")
+				.table("users")
+				.whereJsonOverlaps("name", ["a"]),
+		).toThrow(InvalidQueryError);
+	});
+
+	test("whereJsonLength with a path per dialect", () => {
+		const sqlite = compileOnlyOrm(schema, "sqlite")
+			.table("users")
+			.whereJsonLength("name", ">=", 2, "$.tags")
+			.toSQL();
+		expect(normalize(sqlite.sql)).toContain(
+			'json_array_length("name", ?) >= ?',
+		);
+
+		const mysql = compileOnlyOrm(schema, "mysql")
+			.table("users")
+			.whereJsonLength("name", ">", 1, "$.tags")
+			.toSQL();
+		expect(normalize(mysql.sql)).toContain(
+			"json_length(json_extract(`name`, ?)) > ?",
+		);
+
+		const postgres = compileOnlyOrm(schema, "postgres")
+			.table("users")
+			.whereJsonLength("name", "<", 3, "$.tags")
+			.toSQL();
+		expect(normalize(postgres.sql)).toContain(
+			'jsonb_array_length(("name") #> $1) < $2',
+		);
+	});
+
+	test("whereMorphedTo / whereAttachedTo compile per dialect", () => {
+		const target = {
+			constructor: undefined as unknown,
+			get: (column: string) => (column === "id" ? 7 : undefined),
+		};
+		const build = (kind: DialectKind) => {
+			const orm = compileOnlyOrm(schema, kind);
+			class UserM extends orm.model("users") {
+				static relations = {
+					roles: belongsToMany(() => RoleM, {
+						through: "role_user",
+						foreignPivotKey: "userId",
+						relatedPivotKey: "roleId",
+					}),
+				};
+			}
+			class RoleM extends orm.model("roles") {}
+			class CommentM extends orm.model("comments") {
+				static relations = {
+					commentable: morphTo("commentable", () => ({
+						users: UserM,
+						roles: RoleM,
+					})),
+				};
+			}
+			return { orm, UserM, RoleM, CommentM };
+		};
+
+		for (const kind of ["sqlite", "mysql", "postgres"] as const) {
+			const { orm, UserM, RoleM, CommentM } = build(kind);
+			const commentTarget = {
+				constructor: CommentM,
+				get: (column: string) => (column === "id" ? 3 : undefined),
+			};
+			const roleTarget = {
+				constructor: RoleM,
+				get: (column: string) => (column === "id" ? 9 : undefined),
+			};
+			const byMorph = CommentM.query()
+				.whereMorphedTo("commentable", commentTarget as never)
+				.toSQL();
+			expect(normalize(byMorph.sql)).toContain("commentableType");
+			expect(normalize(byMorph.sql)).toContain("commentableId");
+			expect(byMorph.parameters).toEqual(["comments", 3]);
+
+			const attached = UserM.query()
+				.whereAttachedTo(roleTarget as never)
+				.toSQL();
+			expect(normalize(attached.sql)).toContain("exists");
+			expect(normalize(attached.sql)).toContain("role_user");
+			expect(attached.parameters).toEqual([9]);
+
+			const without = UserM.query()
+				.whereNotAttachedTo(roleTarget as never)
+				.toSQL();
+			expect(normalize(without.sql)).toContain("not exists");
+
+			void target;
+			void orm;
+		}
+	});
+
+	test("new column types compile per dialect", async () => {
+		const mysql = compileOnlyOrm(ddlSchema, "mysql");
+		const mysqlEvent = await capture(mysql, () =>
+			mysql.schemaBuilder().create("widgets", (t) => {
+				t.id();
+				t.char("code", 12);
+				t.tinyInteger("flags").unsigned().default(0);
+				t.smallInteger("rank");
+				t.mediumInteger("size");
+				t.jsonb("payload").nullable();
+			}),
+		);
+		const mysqlSql = normalize(mysqlEvent.sql);
+		expect(mysqlSql).toContain("`code` char(12)");
+		expect(mysqlSql).toContain("`flags` tinyint unsigned");
+		expect(mysqlSql).toContain("`rank` smallint");
+		expect(mysqlSql).toContain("`size` mediumint");
+		expect(mysqlSql).toContain("`payload` json");
+
+		const postgres = compileOnlyOrm(ddlSchema, "postgres");
+		const pgEvent = await capture(postgres, () =>
+			postgres.schemaBuilder().create("widgets", (t) => {
+				t.id();
+				t.char("code", 12);
+				t.tinyInteger("flags").unsigned();
+				t.jsonb("payload").nullable();
+			}),
+		);
+		const pgSql = normalize(pgEvent.sql);
+		expect(pgSql).toContain('"code" char(12)');
+		expect(pgSql).toContain('"flags" smallint');
+		expect(pgSql).toContain('"payload" jsonb');
+
+		const sqlite = compileOnlyOrm(ddlSchema, "sqlite");
+		const sqliteEvent = await capture(sqlite, () =>
+			sqlite.schemaBuilder().create("widgets", (t) => {
+				t.id();
+				t.char("code", 12);
+				t.tinyInteger("flags").unsigned();
+				t.jsonb("payload").nullable();
+			}),
+		);
+		const sqliteSql = normalize(sqliteEvent.sql);
+		expect(sqliteSql).toContain('"code" text');
+		expect(sqliteSql).toContain('"flags" integer');
+		expect(sqliteSql).toContain('"payload" text');
 	});
 });

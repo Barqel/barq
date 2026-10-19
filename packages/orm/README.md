@@ -243,10 +243,19 @@ unknown keys throw), `getOriginal()`, `replicate()` and `toJSON()` with
 `hidden`/`visible` rules, accessors listed in `appends`, and any loaded
 relations.
 
-Casts include `boolean`, `json`/`array`, `collection`, `stringable`,
-`date`/`datetime`, `decimal`, `number`, `string`, `encrypted`,
-`encrypted:array`, `encrypted:collection`, `hashed`, enum validation and
-class-based `static get` / `static set` custom casts.
+Casts include `boolean`, `json`/`array`, `object`, `collection`, `stringable`,
+`int`/`integer`, `float`/`double`/`real`, `decimal`/`decimal:<scale>`,
+`date`/`datetime`, parameterized `date:<format>`/`datetime:<format>` (the
+PHP-style tokens `Y y m n d j H G i s u`), `immutable_date`/
+`immutable_datetime`, `number`, `string`, `encrypted`, `encrypted:array`,
+`encrypted:collection`, `hashed`, enum validation and class-based
+`static get` / `static set` custom casts.
+
+Integer casts truncate on write (`41.9 → 41`), float casts coerce numeric
+strings, `decimal:<n>` returns fixed-scale strings, formatted date casts read
+and write strings in the requested format, and `immutable_*` hands out a
+defensive `Date` copy on every read. Casts are runtime behavior: the static
+`get()` type stays schema-derived (see the limitations).
 
 ```ts
 const encryptedOrm = new Orm({
@@ -569,8 +578,11 @@ Filters (`where`, `orWhere`, callbacks, `whereIn`, `whereNull`, `whereBetween`,
 (`whereIntegerInRaw`/`whereIntegerNotInRaw`, no bindings), correlated
 subqueries (`whereExists`/`whereNotExists`/`orWhereExists`,
 `orWhereNotExists`, `selectSub`), date/time parts (`whereDate`, `whereTime`,
-`whereDay`, `whereMonth`, `whereYear`), JSON predicates (`whereJsonContains`,
-`whereJsonLength`), joins (`join`, `leftJoin` — joined columns become
+`whereDay`, `whereMonth`, `whereYear`), JSON predicates (`whereJsonContains` with deep paths,
+`whereJsonContainsKey`/`whereJsonDoesntContainKey`, `whereJsonOverlaps`,
+`whereJsonLength` with paths), morph/attachment constraints
+(`whereMorphedTo`/`whereNotMorphedTo`, `whereAttachedTo`/
+`whereNotAttachedTo`), joins (`join`, `leftJoin` — joined columns become
 filterable), grouping (`groupBy`, `groupByRaw`, `having`/`havingRaw`),
 ordering (`orderBy`, `orderByRaw`, `latest`, `oldest`, `inRandomOrder`,
 `reorder`), `limit`/`offset`, set operations (`union`/`unionAll`), row locks
@@ -659,6 +671,118 @@ auto-commits, so the bookkeeping stays atomic there but DDL does not roll back
 (engine behavior). Concurrent migrators are serialized with
 `pg_advisory_lock` / `GET_LOCK`.
 
+`reset()` reverses every recorded batch, `refresh()` is `reset()` + `migrate()`,
+`fresh()` drops every table in the connected database and re-runs all
+migrations (destructive — use a scratch database), and `pretend()` compiles
+pending migrations without executing them:
+
+```ts
+await migrator.pretend(); // [{ migration, direction: "up", statements }]
+await migrator.refresh();
+```
+
+### Schema extras
+
+Table builders cover `char`, `tinyInteger`, `smallInteger`, `mediumInteger`,
+`jsonb`, `unsigned()`, `useCurrent()`, `constrained()`, `foreignIdFor(Model)`
+and variadic `dropColumn([...])`. Existing tables can
+`dropUnique(name)` / `dropForeign(name)` on MySQL/PostgreSQL (SQLite throws
+`SchemaError` — recreate the table instead). Foreign keys are emitted as named
+table-level constraints on every dialect, including MySQL where inline
+`references` is parsed but ignored.
+
+### Factories and seeders
+
+```ts
+const users = await User.factory()
+	.define({ email: (i) => `user${i}@example.com`, name: (i) => `User ${i}` })
+	.state({ age: 30 })
+	.count(2)
+	.create({ active: true });
+
+User.factory().define({ name: "Unsaved" }).makeOne(); // no database write
+await runSeeders(orm, [
+	async (db) => { await db.table("countries").insert({ name: "Seeded" }); },
+	{ run: async () => { /* … */ } },
+]);
+```
+
+Factory values go through the same mass-assignment rules as `create()`
+(`fillable`/`guarded`), and definitions may be functions of the row index.
+
+### Pruning
+
+```ts
+class ExpiredSession extends orm.model("sessions") {
+	static prunable = (query: unknown) =>
+		(query as { where(column: string, op: string, value: unknown): unknown })
+			.where("expiresAt", "<", new Date());
+}
+
+await ExpiredSession.prune(500); // default chunk size: 1000
+```
+
+Pruning honors the model's soft-delete scope (rows are trashed, not destroyed)
+and returns the affected count. Pruning does not fire model events.
+
+### Multiple connections
+
+```ts
+const orm = new Orm({
+	schema,
+	dialect: mysql({ uri: "mysql://app@db/app" }),
+	connections: { audit: postgres({ uri: "postgres://app@db/audit" }) },
+});
+
+class AuditEvent extends orm.model("audit_events") {
+	static connection = "audit";
+}
+
+await orm.connection("audit").table("audit_events").insert({ action: "login" });
+```
+
+Child connections share the schema, query listeners, morph map and macros;
+each connection owns its transaction context.
+
+### Builder and model macros
+
+```ts
+orm.macro("whereActive", function (this: ReturnType<typeof orm.table>) {
+	return this.where("active", "=", true);
+});
+await User.query().whereActive().get();
+
+User.macro("isAdult", function (this: User) {
+	return Number(this.get("age")) >= 18;
+});
+```
+
+Augment `QueryBuilderMacros` to type macro chains; model macros install
+prototype methods and refuse to overwrite existing ones.
+
+### Custom pivot models
+
+```ts
+class Membership extends orm.pivot("role_user") {
+	static override casts = { grantedAt: "date:Y-m-d" } as const;
+}
+
+class User extends orm.model("users") {
+	static relations = {
+		roles: belongsToMany(() => Role, {
+			through: "role_user",
+			foreignPivotKey: "userId",
+			relatedPivotKey: "roleId",
+			withPivot: ["note", "grantedAt"],
+			using: Membership,
+		}),
+	};
+}
+```
+
+`using` hydrates eager-loaded pivots as the custom class and applies its casts
+in `attach`/`updateExistingPivot`. Pivot events are not emitted.
+
 ### Raw SQL helpers and errors
 
 All errors extend `BarqError`: `QueryError` (with per-dialect translation),
@@ -732,10 +856,11 @@ relation/load names are runtime-validated (use `RelationManagerOf` for the
 compile-time manager surface); relation paths nest up to 3 levels; generic
 `morphTo` constraints/aggregates are unsupported (`whereHasMorph` covers
 alias-scoped filters); self-referential nested `whereHas` can be ambiguous at
-depth ≥ 2; cursor pagination is forward-only on one column; SQLite JSON
-predicates cover top-level values and one-level objects; cast read values such
-as `Collection`/`Stringable` need narrowing; 64-bit precision requires the
-documented BigInt mode, and raw SQL/JSON need the documented conversions;
+depth ≥ 2; cursor pagination is forward-only on one column; SQLite has no JSON
+overlap operator and cannot drop constraints; cast read values (including
+`decimal:<n>` and `date:<fmt>` strings) need narrowing; `migrator.fresh()` drops
+every table; transactions are scoped per connection; 64-bit precision requires
+the documented BigInt mode, and raw SQL/JSON need the documented conversions;
 live MySQL/PostgreSQL suites are env-gated and skip cleanly unless
 `BARQ_ORM_MYSQL_URL` / `BARQ_ORM_PG_URL` point at scratch servers (CI sets
 both).

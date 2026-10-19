@@ -21,6 +21,7 @@
 // eager loader only need the descriptor shapes.
 
 import type { ColumnNameOf, Schema, TableName } from "../schema/define";
+import type { PivotClassLike } from "./pivot";
 
 /**
  * Any model class usable as a relation target.
@@ -101,6 +102,8 @@ export interface AnyRelationDescriptor {
 	readonly pivotTimestamps?: readonly [string, string];
 	/** `belongsToMany` / `morphToMany`: name of the pivot object. */
 	readonly pivotAccessor?: string;
+	/** Custom pivot model class (`using`). */
+	readonly pivotClass?: unknown;
 	/** `morphedByMany`: the declaring model is the *related* side of the morph. */
 	readonly inverse?: boolean;
 }
@@ -168,6 +171,7 @@ export interface BelongsToMany<
 	P extends string = string,
 	L extends string = "id",
 	PA extends string | undefined = undefined,
+	PC extends PivotClassLike | undefined = undefined,
 > {
 	readonly kind: "belongsToMany";
 	readonly related: () => R;
@@ -181,6 +185,8 @@ export interface BelongsToMany<
 	readonly pivotTimestamps?: readonly [string, string];
 	/** Name of the pivot object attached to related instances (`as`). */
 	readonly pivotAccessor?: PA;
+	/** Custom pivot model class (`using`). */
+	readonly pivotClass?: PC;
 }
 
 /**
@@ -403,10 +409,11 @@ export function belongsToMany<
 	P extends string = string,
 	L extends string = "id",
 	PA extends string | undefined = undefined,
+	PC extends PivotClassLike | undefined = undefined,
 >(
 	related: () => R,
-	options: BelongsToManyOptions<T, F, P, L, PA>,
-): BelongsToMany<R, T, F, P, L, PA> {
+	options: BelongsToManyOptions<T, F, P, L, PA> & { using?: PC },
+): BelongsToMany<R, T, F, P, L, PA, PC> {
 	return {
 		kind: "belongsToMany",
 		related,
@@ -417,6 +424,7 @@ export function belongsToMany<
 		pivotColumns: options.withPivot,
 		pivotTimestamps: normalizePivotTimestamps(options.timestamps),
 		pivotAccessor: options.as,
+		pivotClass: options.using,
 	};
 }
 
@@ -692,6 +700,7 @@ export interface MorphToMany<
 	P extends string = string,
 	L extends string = "id",
 	PA extends string | undefined = undefined,
+	PC extends PivotClassLike | undefined = undefined,
 > {
 	readonly kind: "morphToMany";
 	readonly related: () => R;
@@ -712,6 +721,8 @@ export interface MorphToMany<
 	readonly pivotTimestamps?: readonly [string, string];
 	/** Name of the pivot object attached to related instances (`as`). */
 	readonly pivotAccessor?: PA;
+	/** Custom pivot model class (`using`). */
+	readonly pivotClass?: PC;
 }
 
 /**
@@ -726,11 +737,12 @@ export function morphToMany<
 	P extends string = string,
 	L extends string = "id",
 	PA extends string | undefined = undefined,
+	PC extends PivotClassLike | undefined = undefined,
 >(
 	related: () => R,
 	name: N,
-	options: MorphToManyOptions<T, F, P, L, PA>,
-): MorphToMany<R, N, T, F, P, L, PA> {
+	options: MorphToManyOptions<T, F, P, L, PA> & { using?: PC },
+): MorphToMany<R, N, T, F, P, L, PA, PC> {
 	return {
 		kind: "morphToMany",
 		related,
@@ -743,6 +755,7 @@ export function morphToMany<
 		pivotColumns: options.withPivot,
 		pivotTimestamps: normalizePivotTimestamps(options.timestamps),
 		pivotAccessor: options.as,
+		pivotClass: options.using,
 	};
 }
 

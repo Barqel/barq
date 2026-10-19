@@ -267,11 +267,25 @@ type PivotAccessorOf<D> = D extends { pivotAccessor?: infer A }
 /**
  * Pivot object attached to `belongsToMany` / `morphToMany` results: the two
  * pivot keys plus every `withPivot` / timestamp column (values are `unknown`
- * — the pivot table is not part of the typed schema).
+ * — the pivot table is not part of the typed schema). With a custom pivot
+ * model (`using`) the accessor is typed as an instance of that class.
  */
 type PivotExtraOf<D> = D extends { kind: "belongsToMany" | "morphToMany" }
-	? { [K in PivotAccessorOf<D>]: Record<string, unknown> }
+	? {
+			[K in PivotAccessorOf<D>]: [PivotInstanceOf<D>] extends [never]
+				? Record<string, unknown>
+				: PivotInstanceOf<D>;
+		}
 	: unknown;
+
+/** Instance type of a descriptor's `using` pivot model, if any. */
+type PivotInstanceOf<D> = D extends { pivotClass?: infer C }
+	? C extends abstract new (
+			...args: never[]
+		) => infer P
+		? P
+		: never
+	: never;
 
 export type RelationValueOf<D, Extra = unknown> = D extends {
 	kind:

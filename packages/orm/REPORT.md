@@ -261,6 +261,40 @@ Hierarchy under `BarqError`: `QueryError` (per-dialect translation),
   from the schema, so `json` columns need `instanceof Collection` / `String(...)`
   when reading cast-specific values.
 
+### 1.13 Priority-2 parity wave (completed)
+
+- **Casts.** `int`/`integer` (truncating writes), `float`/`double`/`real`
+  (numeric coercion), `object`, `decimal`/`decimal:<scale>` (fixed-scale
+  strings), `immutable_date`/`immutable_datetime` (defensive copies on every
+  read via the `decorate` flag), and parameterized
+  `date:<format>`/`datetime:<format>` casts using the PHP-token subset
+  `Y y m n d j H G i s u`. Unknown names/parameters throw `SchemaError` when
+  model metadata resolves.
+- **Blueprint / migrator.** `char`, `tinyInteger`, `smallInteger`,
+  `mediumInteger`, `jsonb`, `unsigned()`, `useCurrent()`, `constrained()`,
+  `foreignIdFor()`, variadic `dropColumn([...])`, `dropUnique`/`dropForeign`;
+  `Migrator.reset()`, `refresh()`, `fresh()` and `pretend()`. Foreign keys are
+  emitted as named table-level constraints on every dialect (MySQL parses but
+  ignores inline `references`).
+- **Operational helpers.** `Model.prune(chunk?)` with `static prunable`
+  (soft-delete aware, primary-key chunk deletion), `Model.factory()` with
+  `Factory.define/state/count/make/create/makeOne/createOne`, and
+  `runSeeders()` for functions and `{ run }` objects.
+- **Multiple connections.** `new Orm({ connections })`, `orm.connection(name)`,
+  `orm.connectionNames()` and per-model `static connection`; children share
+  schema, listeners, morph map and macros and are cached per name.
+- **Extensibility.** `orm.macro(name, fn)` installs builder macros (bound in
+  the builder constructor, `QueryBuilderMacros` augmentation for typed chains)
+  and `Model.macro(name, fn)` installs prototype methods.
+- **JSON and polymorphic filters.** `whereJsonContains(path)`,
+  `whereJsonContainsKey`, `whereJsonDoesntContainKey`, `whereJsonOverlaps`,
+  `whereJsonLength(path)`, `whereMorphedTo`/`whereNotMorphedTo` (instance,
+  class or alias) and `whereAttachedTo`/`whereNotAttachedTo` across
+  belongsTo, morphTo, has-one/has-many, pivots and through relations.
+- **Custom pivot models.** `orm.pivot("table")`,
+  `belongsToMany(..., { using })`, custom pivot hydration with casts, and
+  cast-aware `attach`/`updateExistingPivot`.
+
 ---
 ## 2. Key decisions and rationale
 
@@ -292,6 +326,12 @@ Hierarchy under `BarqError`: `QueryError` (per-dialect translation),
 | 24 | One-of-many eager picks one row (pk tiebreak); `whereHas`/aggregates use `= extreme` | A relation can only return one row, while existence/count stay predicate-based (Eloquent's two flavors). Ties are documented rather than hidden. |
 | 25 | `morphedByMany` is the `morphToMany` descriptor with `inverse: true` | One pivot resolver instead of two; keys keep the declaring model's perspective and the type filter uses the related class's alias. |
 | 26 | Morph aliases resolve `static morphAlias` → global map → table name | Per-class overrides stay authoritative; the global map is the escape hatch for type strings written elsewhere. Unresolvable `morphTo` manager rows throw `InvalidQueryError` instead of guessing. |
+| 27 | Built-in casts coerce on `set`; parameterized names accept a small PHP-token subset | Write/read behavior matches Eloquent without shipping a date-formatting library; invalid names fail loudly at meta resolution. |
+| 28 | `immutable_*` casts mark `decorate: true` and re-run `get` on every read | Attributes stay `Date`-typed, while callers can never mutate the stored instance. |
+| 29 | Foreign keys are table-level constraints with deterministic names on every dialect | MySQL parses and ignores inline `references`; naming them (`<table>_<column>_foreign`) makes `dropForeign` and live schema introspection reliable. |
+| 30 | Child connections are cached `Orm` instances sharing `OrmShared`; each owns its transaction ALS | Independent pools/transaction contexts per connection, with one listener/morph/macro registry for the whole application. |
+| 31 | Builder macros are bound in the constructor; model macros go on the prototype | Macro chains keep the concrete builder/instance as `this`; declaring methods on the prototype preserves normal instance dispatch and collision checks. |
+| 32 | `dropUnique`/`dropForeign` try constraint names then index names | The same API must remove PG constraints/indexes and MySQL FKs/indexes; SQLite cannot drop either, so it throws instead of silently doing nothing. |
 
 ---
 
@@ -549,6 +589,18 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
 
 ---
 
+### 4.9 Priority-2 live re-verification
+
+- Offline: `bun test` → **255 pass / 2 skip / 0 fail**, 257 tests across 12
+  files (1,107 expectations); `bun run typecheck` and `bun run typecheck:tests`
+  clean; `biome check` reports warnings only (no errors).
+- Local MySQL 8.4.11 + PostgreSQL 18.6:
+  `BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=… bun test tests/integration/mysql.test.ts tests/integration/postgres.test.ts`
+  → **58 pass / 0 fail** (29 tests per engine, including the Priority-2 block).
+- Podman scratch databases (MySQL 8.4.11 `barq_test`, PostgreSQL 16.15
+  `barq_test`, non-destructive to the local `hassan-kerdash` databases): same
+  command → **58 pass / 0 fail**.
+
 ## 5. Test / verification strategy and results
 
 ### 5.1 What each layer proves
@@ -738,8 +790,10 @@ Everything below is documented in `docs/limitations.md`, not hidden:
 9. **Cast read values are runtime-narrowed**: `get()` stays typed from the
    schema; `collection`/`stringable` values need `instanceof Collection` /
    `String(...)` when the schema column is `json`.
-10. **SQLite JSON predicates** cover top-level scalars/arrays and one-level
-    objects; deep JSON paths require `whereRaw`/`raw()`.
+10. **JSON overlap is dialect-specific**: MySQL `JSON_OVERLAPS`, PostgreSQL
+    containment in either direction (`@>`/`<@`); SQLite throws
+    `InvalidQueryError`. JSON paths accept `$.a.b`/`a.b` (letters, digits,
+    `_`, `$`); array indexes and quoted keys are rejected.
 11. **Touched owners** (`static touches`) update the belongsTo owner's
     `updatedAt` directly after a save; owner model events are not fired and
     touches do not recurse.
@@ -771,8 +825,11 @@ Everything below is documented in `docs/limitations.md`, not hidden:
     `wherePivot`/`wherePivotIn`/`orderByPivot` exist on the manager, never
     inside eager-load constraint callbacks or `whereHas`. `orderByPivot` uses a
     correlated `limit 1` scalar subquery per row.
-24. **Custom pivot models (`using`-style) are unsupported**: pivot rows are
-    plain records — no pivot model class, pivot casts or pivot events.
+24. **Custom pivot models (`using`) cover hydration and writes, not events.**
+    Eager-loaded pivots instantiate the class with its casts and
+    `attach`/`updateExistingPivot` apply them; pivot model events are not
+    emitted. Extra columns still require `withPivot`; manager queries return
+    plain related models.
 25. **One-of-many tie semantics**: eager loading returns exactly one row
     (primary-key tiebreak in the aggregate's direction), while
     `whereHas`/`withCount`/`withSum` use `= extreme` and may match several tied
@@ -782,6 +839,25 @@ Everything below is documented in `docs/limitations.md`, not hidden:
     name; maps affect future writes, not existing rows. A `morphTo` manager
     query (`comment.relation("commentable").query()`) throws
     `InvalidQueryError` when the row's type is null or unknown.
+
+27. **SQLite cannot drop constraints**: `dropUnique`/`dropForeign` throw
+    `SchemaError`; MySQL tries `drop foreign key` → `drop index`, PostgreSQL
+    tries `drop constraint` → `drop index`.
+28. **`migrator.fresh()` drops every table** in the connected database before
+    re-running migrations; use a scratch database. `reset()`/`refresh()` only
+    reverse recorded batches.
+29. **Transactions are scoped per connection**: a child `Orm` has its own
+    `AsyncLocalStorage` context, so a default-connection transaction does not
+    cover queries sent through `orm.connection(name)`.
+30. **`whereAttachedTo` assumes the related primary key is `id`** for
+    has-one/has-many/pivot/through relations; `belongsTo` uses the owner key
+    and `morphTo` uses the morph columns.
+31. **Pruning does not fire model events**; soft-deleting models are trashed.
+    `runSeeders` is sequential and not transactional by itself.
+32. **Built-in cast names do not refine static return types**: `decimal:<n>`
+    and `date:<fmt>` return strings at runtime while `get()` stays
+    schema-typed; custom casts with `set` narrow write payloads via
+    `CastedValues`.
 
 No failing tests are hidden; no fake implementations are presented as real.
 
@@ -798,14 +874,8 @@ No failing tests are hidden; no fake implementations are presented as real.
 5. Publish to npm when ready: `license: MIT`, `publishConfig.access: public`,
    repository/homepage/bugs metadata and `prepublishOnly` are already set;
    the package has not actually been published.
-6. Deferred by scope (Priority 2): Eloquent cast/date parity (`int`/`float`/
-   `object`/`immutable`/parameterized casts) and Blueprint/migrator extras
-   (`fresh`/`refresh`/`reset`/`pretend`).
-7. Deferred by scope (Priority 2/3): pruning, factories/seeders,
-   multi-connection routing, macros, JSON extras and
-   `whereMorphedTo`/`whereAttachedTo`.
-8. Deferred by scope (Priority 3): custom pivot models (`using`) and pivot
-   casts/events (see §7.24).
+8. Pivot model events remain out of scope; custom pivot hydration/casts are
+   implemented (see §1.13 and §7.24).
 
 ---
 

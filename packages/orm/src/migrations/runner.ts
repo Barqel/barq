@@ -66,6 +66,13 @@ export interface MigrateResult {
 	batch: number;
 }
 
+/** One migration's compiled statements from `Migrator.pretend()`. */
+export interface PretendMigration {
+	migration: string;
+	direction: "up" | "down";
+	statements: string[];
+}
+
 const DEFAULT_TABLE = "barq_migrations";
 const TABLE_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -201,6 +208,87 @@ export class Migrator<S extends Schema> {
 		} finally {
 			await this.#releaseLock();
 		}
+	}
+
+	// -----------------------------------------------------------------------
+	// fresh / refresh / reset / pretend
+	// -----------------------------------------------------------------------
+
+	/**
+	 * Rolls back every applied migration (all batches).
+	 */
+	async reset(): Promise<string[]> {
+		await this.ensureTable();
+		const records = await this.#records();
+		const batches = new Set(records.map((record) => record.batch));
+		if (batches.size === 0) return [];
+		return this.rollback(batches.size);
+	}
+
+	/** `reset()` followed by `migrate()` — Eloquent's `migrate:refresh`. */
+	async refresh(): Promise<MigrateResult> {
+		await this.reset();
+		return this.migrate();
+	}
+
+	/**
+	 * Drops **every table in the database** and re-runs all migrations
+	 * (Eloquent's `migrate:fresh`). Destructive by design — point it at a
+	 * scratch database. PostgreSQL drops with `cascade`; MySQL disables
+	 * foreign-key checks around the drops.
+	 */
+	async fresh(): Promise<MigrateResult> {
+		await this.ensureTable();
+		const tables = await this.#orm.executor().introspection.getTables();
+		const names = tables
+			.map((table) => table.name)
+			.filter((name) => TABLE_PATTERN.test(name));
+		const kind = this.#orm.dialectKind;
+		if (kind === "mysql") {
+			await this.#orm.raw("set foreign_key_checks = 0");
+		}
+		try {
+			for (const name of names) {
+				if (kind === "postgres") {
+					await this.#orm.raw(`drop table if exists "${name}" cascade`);
+				} else if (kind === "mysql") {
+					await this.#orm.raw(`drop table if exists \`${name}\``);
+				} else {
+					await this.#orm.raw(`drop table if exists "${name}"`);
+				}
+			}
+		} finally {
+			if (kind === "mysql") {
+				await this.#orm.raw("set foreign_key_checks = 1");
+			}
+		}
+		return this.migrate();
+	}
+
+	/**
+	 * Compiles the SQL of every pending migration **without executing it**
+	 * (Eloquent's `migrate --pretend`). Statements carry bind placeholders —
+	 * the same text a database log would show.
+	 */
+	async pretend(): Promise<PretendMigration[]> {
+		await this.ensureTable();
+		const records = await this.#records();
+		const ran = new Set(records.map((record) => record.name));
+		const pending = this.#migrations.filter(
+			(migration) => !ran.has(migration.name),
+		);
+		const output: PretendMigration[] = [];
+		for (const migration of pending) {
+			const { statements } = await this.#orm.captureStatements(async () => {
+				await migration.up(this.#context(this.#orm));
+			});
+			output.push({
+				migration: migration.name,
+				direction: "up",
+				statements,
+			});
+		}
+		return output;
 	}
 
 	// -----------------------------------------------------------------------

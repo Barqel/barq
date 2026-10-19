@@ -52,6 +52,8 @@ export interface ColumnSpec {
 	primary: boolean;
 	autoIncrement: boolean;
 	unique: boolean;
+	/** Emits `unsigned` on MySQL; ignored on dialects without it. */
+	unsigned?: boolean;
 	hasDefault: boolean;
 	defaultValue?: unknown;
 	defaultNow: boolean;
@@ -97,6 +99,41 @@ export class ColumnBuilder {
 	defaultNow(): this {
 		this.#spec.defaultNow = true;
 		return this;
+	}
+
+	/** Alias of `defaultNow` (Eloquent's `useCurrent`). */
+	useCurrent(): this {
+		return this.defaultNow();
+	}
+
+	/** Emits `unsigned` on MySQL (ignored elsewhere). */
+	unsigned(): this {
+		this.#spec.unsigned = true;
+		return this;
+	}
+
+	/**
+	 * Adds a foreign key to the table inferred from the column name
+	 * (`user_id` → `users.id`, `userId` → `users.id`) or an explicit table.
+	 */
+	constrained(table?: string, column = "id"): this {
+		const name = this.#spec.name;
+		let target = table;
+		if (target === undefined) {
+			const base =
+				name.endsWith("_id") || name.endsWith("Id")
+					? name.slice(0, -3)
+					: name.endsWith("id")
+						? name.slice(0, -2)
+						: "";
+			if (base === "") {
+				throw new SchemaError(
+					`constrained(): column "${name}" does not look like a foreign key. Pass the table name explicitly.`,
+				);
+			}
+			target = `${base.replace(/_+$/, "")}s`;
+		}
+		return this.references(`${target}.${column}` as `${string}.${string}`);
 	}
 
 	/** Marks the column as the primary key. */
@@ -185,9 +222,29 @@ export class TableBuilder {
 		return this.#add(name, "text");
 	}
 
+	/** Fixed-length CHAR. */
+	char(name: string, length = 255): ColumnBuilder {
+		return this.#add(name, "char", { length });
+	}
+
 	/** 32-bit integer. */
 	integer(name: string): ColumnBuilder {
 		return this.#add(name, "integer");
+	}
+
+	/** 1-byte integer (MySQL `tinyint`; smaller alias elsewhere). */
+	tinyInteger(name: string): ColumnBuilder {
+		return this.#add(name, "tinyint");
+	}
+
+	/** 2-byte integer (MySQL `smallint`). */
+	smallInteger(name: string): ColumnBuilder {
+		return this.#add(name, "smallint");
+	}
+
+	/** 3-byte integer (MySQL `mediumint`). */
+	mediumInteger(name: string): ColumnBuilder {
+		return this.#add(name, "mediumint");
 	}
 
 	/** 64-bit integer. */
@@ -235,6 +292,11 @@ export class TableBuilder {
 		return this.#add(name, "json");
 	}
 
+	/** JSON document (`jsonb` on PostgreSQL, `json` on MySQL, text on SQLite). */
+	jsonb(name: string): ColumnBuilder {
+		return this.#add(name, "jsonb");
+	}
+
 	/** UUID (native on PostgreSQL, CHAR(36) elsewhere). */
 	uuid(name: string): ColumnBuilder {
 		return this.#add(name, "uuid");
@@ -248,6 +310,27 @@ export class TableBuilder {
 	/** Foreign-key integer column; chain `.references("users.id")`. */
 	foreignId(name: string): ColumnBuilder {
 		return this.#add(name, "bigint");
+	}
+
+	/**
+	 * Foreign-key column for another model class (`foreignIdFor(User)` →
+	 * `userId` referencing `users.id`; override the column name with the
+	 * second argument).
+	 */
+	foreignIdFor(
+		modelOrTable: string | { readonly __table: string },
+		name?: string,
+		column = "id",
+	): ColumnBuilder {
+		const table =
+			typeof modelOrTable === "string" ? modelOrTable : modelOrTable.__table;
+		validateIdentifier("table", table);
+		const columnName = name ?? `${table.replace(/s$/, "")}Id`;
+		validateIdentifier("column", columnName);
+		const builder = this.#add(columnName, "bigint");
+		return builder.references(
+			`${table}.${column}` as `${string}.${string}`,
+		) as ColumnBuilder;
 	}
 
 	/** Adds nullable `createdAt` / `updatedAt` datetime columns. */
@@ -275,11 +358,14 @@ export class AlterTableBuilder extends TableBuilder {
 	/** @internal */ readonly drops: string[] = [];
 	/** @internal */ readonly renames: Array<{ from: string; to: string }> = [];
 	/** @internal */ readonly droppedIndexes: string[] = [];
+	/** @internal */ readonly droppedConstraints: string[] = [];
 
-	/** Drops a column. */
-	dropColumn(name: string): this {
-		validateIdentifier("column", name);
-		this.drops.push(name);
+	/** Drops one or more columns. */
+	dropColumn(name: string | readonly string[]): this {
+		for (const column of toArray(name)) {
+			validateIdentifier("column", column);
+			this.drops.push(column);
+		}
 		return this;
 	}
 
@@ -295,6 +381,23 @@ export class AlterTableBuilder extends TableBuilder {
 	dropIndex(name: string): this {
 		validateIdentifier("index", name);
 		this.droppedIndexes.push(name);
+		return this;
+	}
+
+	/**
+	 * Drops a unique constraint by name (PostgreSQL `drop constraint`,
+	 * index drop elsewhere).
+	 */
+	dropUnique(name: string): this {
+		validateIdentifier("index", name);
+		this.droppedConstraints.push(name);
+		return this;
+	}
+
+	/** Drops a foreign key by name (same mechanics as `dropUnique`). */
+	dropForeign(name: string): this {
+		validateIdentifier("index", name);
+		this.droppedConstraints.push(name);
 		return this;
 	}
 }
@@ -361,6 +464,26 @@ export class SchemaBuilder<S extends Schema> {
 					.compile() as CompiledQuery,
 			);
 		}
+		for (const column of builder.columns) {
+			if (column.references === undefined) continue;
+			if (this.dialect === "sqlite") {
+				throw new SchemaError(
+					`alter("${table}"): SQLite cannot add the foreign key for "${column.name}" to an existing table. Recreate the table instead.`,
+				);
+			}
+			await this.#orm.execute(
+				executor.schema
+					.alterTable(table)
+					.addForeignKeyConstraint(
+						`${table}_${column.name}_foreign`,
+						[column.name],
+						column.references.table,
+						[column.references.column],
+						(fk: AnyStatement) => this.#applyReferenceActions(fk, column),
+					)
+					.compile() as CompiledQuery,
+			);
+		}
 		for (const name of builder.drops) {
 			await this.#orm.execute(
 				executor.schema
@@ -378,12 +501,10 @@ export class SchemaBuilder<S extends Schema> {
 			);
 		}
 		for (const name of builder.droppedIndexes) {
-			await this.#orm.execute(
-				executor.schema
-					.alterTable(table)
-					.dropIndex(name)
-					.compile() as CompiledQuery,
-			);
+			await this.#dropIndexByName(table, name);
+		}
+		for (const name of builder.droppedConstraints) {
+			await this.#dropConstraint(table, name);
 		}
 		for (const index of builder.indexes) {
 			await this.#createIndex(table, index);
@@ -437,7 +558,32 @@ export class SchemaBuilder<S extends Schema> {
 				(col: AnyStatement) => this.#applyColumn(col, column),
 			);
 		}
+		// Foreign keys are table-level constraints: MySQL parses but ignores
+		// inline `references`, so they must be declared here to be enforced.
+		for (const column of builder.columns) {
+			const reference = column.references;
+			if (reference === undefined) continue;
+			query = query.addForeignKeyConstraint(
+				`${table}_${column.name}_foreign`,
+				[column.name],
+				reference.table,
+				[reference.column],
+				(fk: AnyStatement) => this.#applyReferenceActions(fk, column),
+			);
+		}
 		return query.compile() as CompiledQuery;
+	}
+
+	#applyReferenceActions(
+		foreignKey: AnyStatement,
+		column: ColumnSpec,
+	): AnyStatement {
+		let output = foreignKey;
+		if (column.onDelete !== undefined)
+			output = output.onDelete(column.onDelete);
+		if (column.onUpdate !== undefined)
+			output = output.onUpdate(column.onUpdate);
+		return output;
 	}
 
 	async #createIndex(table: string, index: IndexSpec): Promise<void> {
@@ -457,6 +603,45 @@ export class SchemaBuilder<S extends Schema> {
 		await this.#orm.execute(query.compile() as CompiledQuery);
 	}
 
+	async #dropIndexByName(table: string, name: string): Promise<void> {
+		const dialect = this.dialect;
+		if (dialect === "mysql") {
+			await this.#orm.raw(`alter table \`${table}\` drop index \`${name}\``);
+			return;
+		}
+		await this.#orm.raw(`drop index if exists "${name}"`);
+	}
+
+	async #dropConstraint(table: string, name: string): Promise<void> {
+		const dialect = this.dialect;
+		if (dialect === "postgres") {
+			// `dropUnique` may target either a real constraint (inline
+			// `unique`) or a plain unique index (`create unique index`), so
+			// fall back to `drop index` when the constraint does not exist.
+			try {
+				await this.#orm.raw(`alter table "${table}" drop constraint "${name}"`);
+			} catch {
+				await this.#orm.raw(`drop index "${name}"`);
+			}
+			return;
+		}
+		if (dialect === "mysql") {
+			// `dropForeign` needs `drop foreign key`; `dropUnique` targets an
+			// index, so try the constraint form first and fall back.
+			try {
+				await this.#orm.raw(
+					`alter table \`${table}\` drop foreign key \`${name}\``,
+				);
+			} catch {
+				await this.#orm.raw(`alter table \`${table}\` drop index \`${name}\``);
+			}
+			return;
+		}
+		throw new SchemaError(
+			`dropUnique("${name}") / dropForeign("${name}") on SQLite: inline constraints cannot be dropped. Drop and recreate the table instead.`,
+		);
+	}
+
 	#applyColumn(col: AnyStatement, column: ColumnSpec): AnyStatement {
 		let output = col;
 		if (column.primary) output = output.primaryKey();
@@ -474,15 +659,6 @@ export class SchemaBuilder<S extends Schema> {
 			);
 		}
 		if (column.unique) output = output.unique();
-		if (column.references !== undefined) {
-			output = output.references(
-				`${column.references.table}.${column.references.column}`,
-			);
-			if (column.onDelete !== undefined)
-				output = output.onDelete(column.onDelete);
-			if (column.onUpdate !== undefined)
-				output = output.onUpdate(column.onUpdate);
-		}
 		return output;
 	}
 
@@ -495,12 +671,42 @@ export class SchemaBuilder<S extends Schema> {
 					: `varchar(${column.length ?? 255})`;
 			case "text":
 				return "text";
+			case "char":
+				return dialect === "sqlite" ? "text" : `char(${column.length ?? 255})`;
 			case "integer":
+				if (dialect === "mysql" && column.unsigned === true) {
+					return sql`integer unsigned`;
+				}
 				return "integer";
 			case "bigint":
 				// SQLite has no separate 64-bit type; `integer` is required for
 				// `INTEGER PRIMARY KEY AUTOINCREMENT` to be legal.
-				return dialect === "sqlite" ? "integer" : "bigint";
+				if (dialect === "sqlite") return "integer";
+				if (dialect === "mysql" && column.unsigned === true) {
+					return sql`bigint unsigned`;
+				}
+				return "bigint";
+			case "tinyint":
+				if (dialect === "mysql") {
+					return column.unsigned === true
+						? sql`tinyint unsigned`
+						: sql`tinyint`;
+				}
+				return dialect === "postgres" ? "smallint" : "integer";
+			case "smallint":
+				if (dialect === "mysql") {
+					return column.unsigned === true
+						? sql`smallint unsigned`
+						: sql`smallint`;
+				}
+				return dialect === "postgres" ? "smallint" : "integer";
+			case "mediumint":
+				if (dialect === "mysql") {
+					return column.unsigned === true
+						? sql`mediumint unsigned`
+						: sql`mediumint`;
+				}
+				return "integer";
 			case "float":
 				return dialect === "postgres" ? "real" : sql`float`;
 			case "double":
@@ -522,6 +728,12 @@ export class SchemaBuilder<S extends Schema> {
 						? "text"
 						: "timestamp";
 			case "json":
+				return dialect === "postgres"
+					? "jsonb"
+					: dialect === "mysql"
+						? "json"
+						: "text";
+			case "jsonb":
 				return dialect === "postgres"
 					? "jsonb"
 					: dialect === "mysql"

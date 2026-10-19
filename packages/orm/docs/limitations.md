@@ -45,16 +45,20 @@ right move is a failing test in `tests/`.
 - **Cast read values are runtime-narrowed.** `get()` is typed from the schema.
   A `collection` cast returns a `Collection` and a `stringable` cast returns a
   `Stringable`, but schema columns typed `json` remain broad; narrow with
-  `instanceof Collection` / `String(...)` when needed. Cast getters do not
-  rewrite the static `get()` return type.
+  `instanceof Collection` / `String(...)` when needed. The same is true for
+  Priority-2 names: `int`/`float` coerce at runtime, `decimal:<n>` returns a
+  fixed-scale string and `date:<fmt>`/`datetime:<fmt>` return formatted
+  strings, while the static return type stays the schema type. Custom casts
+  that declare `set` still narrow write payloads through `CastedValues`.
 - **Cursor pagination is forward-only.** `cursorPaginate` orders by one column
   (the primary key unless `column` is passed), emits an opaque `nextCursor`,
   and always returns `prevCursor: null`. It does not combine with arbitrary
   multi-column ordering or return a total count.
-- **SQLite JSON predicates have a pragmatic subset.** `whereJsonContains`
-  supports top-level scalars, top-level arrays, and one-level objects;
-  `whereJsonLength` measures a top-level JSON array. Deep JSON paths are not
-  exposed as a builder API — use `whereRaw`/`raw()` for path expressions.
+- **JSON overlap is dialect-specific.** `whereJsonOverlaps` uses MySQL's
+  `JSON_OVERLAPS` and PostgreSQL containment in either direction
+  (`@>`/`<@`); SQLite has no equivalent and throws `InvalidQueryError`. JSON
+  paths accept the subset `$.a.b` / `a.b` (letters, digits, `_`, `$`); array
+  indexes and quoted keys are rejected with `InvalidQueryError`.
 - **`Stringable` is intentionally small.** It covers common string operations
   (case, trim, contains/starts/ends, replace, slug/camel/studly, length, value,
   JSON), not Laravel's entire string API.
@@ -76,9 +80,12 @@ right move is a failing test in `tests/`.
   only — never inside an eager-load constraint callback or `whereHas`.
   `orderByPivot` compiles to a correlated scalar subquery with `limit 1`; with
   duplicate pivot rows the ordered value is the first matching row's.
-- **Custom pivot models are not supported.** Pivot rows hydrate into plain
-  records (`role.membership.note`), not a model class; Eloquent-style
-  `using()` pivot models, pivot casts and pivot events do not exist.
+- **Custom pivot models cover hydration and writes, not events.** `using`
+  instantiates the pivot class during eager loading and applies its casts in
+  `attach`/`updateExistingPivot`; pivot model events are not emitted. Extra
+  columns still need `withPivot` (and `timestamps` for pivot timestamps) to be
+  selected, and relation-manager queries still return plain related models
+  without pivot objects.
 - **One-of-many rows come in two flavors.** Eager loading (`with("latestPost")`)
   returns a single row and breaks ties deterministically on the primary key in
   the aggregate's direction. `whereHas`/`withCount`/`withSum` and manager
@@ -106,6 +113,35 @@ right move is a failing test in `tests/`.
 - **`increment` / `decrement` on non-numeric columns.** Only declared
   `integer`, `bigint`, `float`, `double` and `decimal` columns are accepted;
   runtime validation rejects everything else instead of corrupting values.
+- **SQLite cannot drop constraints.** `dropUnique`/`dropForeign` on SQLite
+  throw `SchemaError`; recreate the table instead. MySQL tries
+  `drop foreign key` then `drop index`; PostgreSQL tries `drop constraint`
+  then `drop index`.
+- **`migrator.fresh()` is destructive.** It drops *every* table in the
+  connected database (schema-introspected) and re-runs all migrations. Point
+  it at a scratch database; `reset()`/`refresh()` only reverse recorded
+  batches.
+- **Connection-scoped transactions.** `orm.connection(name)` returns a cached
+  child `Orm` sharing the schema, listeners, morph map and macros, but each
+  connection has its own `AsyncLocalStorage` transaction context. A transaction
+  opened on the default connection does not cover queries sent through a child
+  connection (and vice versa).
+- **`whereAttachedTo` assumes the related primary key is `id`.** For
+  has-one/has-many/pivot/through relations the predicate is
+  `whereHas(relation, q => q.where("id", target.get("id")))`; non-`id` primary
+  keys need an explicit `whereHas`. `belongsTo` uses the configured owner key
+  and `morphTo` uses the morph columns.
+- **Pruning does not fire model events.** `static prunable` narrows the query,
+  chunks are loaded and deleted by primary key (soft-deleting models are
+  trashed). Use observers if side effects are required.
+- **Factories and seeders are plain helpers.** Factory definitions go through
+  `prepareAssignment` (fillable/guarded apply); `runSeeders` executes
+  sequentially outside a transaction, so wrap it in `orm.transaction()` when
+  atomicity matters.
+- **MySQL foreign keys are table-level.** `references()`/`constrained()`
+  compile to named table-level constraints on every dialect because MySQL
+  parses but ignores inline `references`; columns added with `alter()` get a
+  follow-up `alter table … add constraint`.
 
 ## Behavioral notes / sharp edges
 
@@ -170,13 +206,18 @@ right move is a failing test in `tests/`.
   shared live suite on MySQL/PostgreSQL, including a MySQL insert id beyond
   `Number.MAX_SAFE_INTEGER`. Type-level tests assert `bigint` row, insert,
   aggregate and relation-aggregate types.
-- **MySQL / PostgreSQL**: verified live with the shared 21-test
-  `runDialectSuite` against MySQL 8.4.11 and PostgreSQL 16.15 and 18.6,
+- **MySQL / PostgreSQL**: verified live with the shared 29-test
+  `runDialectSuite` (per engine) against local MySQL 8.4.11 and PostgreSQL
+  18.6, and Podman MySQL 8.4.11 / PostgreSQL 16.15 scratch databases,
   including DDL, auto-increment identity, CRUD, relations/eager loading,
   polymorphic and pivot relations (`morphedByMany`, pivot extras/timestamps,
   `wherePivot`/`wherePivotIn`/`orderByPivot`), one-of-many extremes, default
-  owners, aggregates, upserts, soft deletes, transactions and migrations. SQL
-  generation is also asserted statement-by-statement via
+  owners, aggregates, upserts, soft deletes, transactions and migrations, plus
+  the Priority-2 block (cast write/read coercion, `char`/sized-int/`jsonb`/
+  `unsigned` DDL, `dropUnique`/`dropForeign`, migrator
+  `pretend`/`reset`/`refresh`/`fresh`, pruning, factories/seeders, JSON
+  paths/keys/length/overlaps, `whereMorphedTo`/`whereAttachedTo` and custom
+  pivot casts). SQL generation is also asserted statement-by-statement via
   `@barqel/barq-orm/testing` (`compileOnlyOrm`).
   The entry points stay env-gated and skip cleanly unless
   `BARQ_ORM_MYSQL_URL` / `BARQ_ORM_PG_URL` are set; `.github/workflows/orm.yml`

@@ -27,6 +27,7 @@ import { hydrateRow } from "../query/hydrate";
 import type { Schema } from "../schema/define";
 import { type AnyRelationDescriptor, relationAt } from "./descriptors";
 import { ofManyPredicateSql, pickOfMany } from "./of-many";
+import { instantiatePivot } from "./pivot";
 
 /** Internal compile boundary. */
 type AnyStatement = any;
@@ -738,8 +739,12 @@ async function loadRelation(
 		for (const column of pivotColumns) pivot[column] = row[column];
 		for (const column of pivotTimestamps ?? []) pivot[column] = row[column];
 		if (morphTypeColumn !== null) pivot[morphTypeColumn] = row[morphTypeColumn];
+		const pivotValue: unknown =
+			descriptor.pivotClass === undefined
+				? pivot
+				: instantiatePivot(descriptor.pivotClass, pivot, orm.encryptionKey);
 		const instance = internalsOf(child).clone();
-		internalsOf(instance).setExtra(pivotAccessor, pivot);
+		internalsOf(instance).setExtra(pivotAccessor, pivotValue);
 		attached.push(instance);
 		const key = row[foreignPivotKey];
 		const bucket = byParent.get(key);
