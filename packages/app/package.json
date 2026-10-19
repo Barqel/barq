@@ -32,19 +32,7 @@
 		"stubs"
 	],
 	"dependencies": {
-		"@barqel/barq": "^1.0.3",
-		"@barqel/barq-cli": "^1.0.0",
-		"@barqel/barq-compress": "^1.0.0",
-		"@barqel/barq-cron": "^1.0.0",
-		"@barqel/barq-env": "^1.0.0",
-		"@barqel/barq-events": "^1.0.0",
-		"@barqel/barq-helmet": "^1.0.1",
-		"@barqel/barq-i18n": "^1.0.1",
-		"@barqel/barq-idempotency": "^1.0.0",
-		"@barqel/barq-logger": "^1.0.0",
-		"@barqel/barq-openapi": "^1.0.0",
-		"@barqel/barq-rate-limit": "^1.0.0",
-		"@barqel/barq-static": "^1.0.0",
+
 		"reflect-metadata": "^0.2.2",
 		"tsyringe": "^4.10.0",
 		"zod": "^4.6.6"
