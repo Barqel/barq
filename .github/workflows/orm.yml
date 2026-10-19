@@ -92,3 +92,65 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Run every test against both live engines
         run: bun test
+
+  node-runtime:
+    name: Node runtime smoke (built + packed)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/orm
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: barq_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -psecret --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: barq_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d barq_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      BARQ_ORM_MYSQL_URL: mysql://root:secret@127.0.0.1:3306/barq_test
+      BARQ_ORM_PG_URL: postgres://postgres:secret@127.0.0.1:5432/barq_test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install workspace dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+      - name: Build package
+        run: bun run build
+      - name: Node smoke against dist (SQLite, MySQL, PostgreSQL)
+        run: bun run smoke
+      - name: Pack the tarball
+        run: |
+          mkdir -p /tmp/barq-pack
+          bun pm pack --destination /tmp/barq-pack
+      - name: Install the tarball in a scratch project and smoke it under Node
+        run: |
+          mkdir -p /tmp/barq-pack-smoke
+          cd /tmp/barq-pack-smoke
+          cp "$GITHUB_WORKSPACE/packages/orm/tests/node/smoke.mjs" .
+          npm init -y >/dev/null
+          npm install --no-save /tmp/barq-pack/*.tgz mysql2 pg
+          BARQ_ORM_PACKED=1 node --no-warnings smoke.mjs

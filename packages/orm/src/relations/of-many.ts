@@ -1,14 +1,17 @@
 // One-of-many (`latestOfMany` / `oldestOfMany` / `ofMany`) SQL fragments.
 //
-// The predicate selects, per parent, the single related row holding the
-// extreme value of one column:
+// The predicate selects, per parent, exactly one related row: the row holding
+// the extreme value of one column, breaking ties on the primary key in the
+// same direction (matching the eager loader's `pickOfMany`):
 //
-//   related.column = (
-//     select max(inner.column) from related as inner
+//   related.pk = (
+//     select inner.pk from related as inner
 //     where inner.foreignKey = <correlation> [and inner.deletedAt is null]
+//     order by inner.column <dir>, inner.pk <dir> limit 1
 //   )
 //
-// Ties are left to the caller (the eager loader breaks them by primary key).
+// Comparing the primary key keeps the predicate single-row even when several
+// rows share the extreme value.
 // Everything interpolated here is a schema-validated identifier or a bound
 // value, never user text.
 
@@ -40,11 +43,15 @@ export type OfManyCorrelation =
 export interface OfManyPredicateOptions {
 	/** Related table holding the candidate rows. */
 	readonly table: string;
+	/** Reference used to qualify the outer row (an alias, when aliased). */
+	readonly outerTable?: string;
 	/** Column the extreme value is computed on. */
 	readonly column: string;
 	readonly aggregate: "min" | "max";
 	/** Foreign key on the related table pointing at the parent key. */
 	readonly foreignKey: string;
+	/** Primary key used to break ties and to match the single extreme row. */
+	readonly primaryKey: string;
 	/** How the extreme subquery finds "this parent". */
 	readonly correlate: OfManyCorrelation;
 	readonly soft?: OfManySoftScope | undefined;
@@ -61,7 +68,9 @@ export function ofManyPredicateSql(
 	dialect: DialectKind,
 	options: OfManyPredicateOptions,
 ): RawExpression {
+	const direction = options.aggregate === "max" ? "desc" : "asc";
 	const inner = `${INNER_ALIAS}.${options.column}`;
+	const innerKey = `${INNER_ALIAS}.${options.primaryKey}`;
 	let correlation: string;
 	const parameters: unknown[] = [];
 	if (options.correlate.kind === "ref") {
@@ -79,12 +88,19 @@ export function ofManyPredicateSql(
 			options.soft.mode === "only" ? "not " : ""
 		}null`;
 	}
-	const sqlText = `${quoteReference(`${options.table}.${options.column}`, dialect)} = (select ${
-		options.aggregate
-	}(${quoteReference(inner, dialect)}) from ${quoteReference(options.table, dialect)} as ${quoteIdentifier(
+	const sqlText = `${quoteReference(
+		`${options.outerTable ?? options.table}.${options.primaryKey}`,
+		dialect,
+	)} = (select ${quoteReference(
+		innerKey,
+		dialect,
+	)} from ${quoteReference(options.table, dialect)} as ${quoteIdentifier(
 		INNER_ALIAS,
 		dialect,
-	)} where ${correlation}${soft})`;
+	)} where ${correlation}${soft} order by ${quoteReference(
+		inner,
+		dialect,
+	)} ${direction}, ${quoteReference(innerKey, dialect)} ${direction} limit 1)`;
 	return raw(sqlText, parameters);
 }
 

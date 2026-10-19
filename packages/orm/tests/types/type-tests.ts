@@ -35,6 +35,7 @@ import {
 	morphTo,
 	morphToMany,
 	Orm,
+	runSeeders,
 	Stringable,
 } from "../../src/index";
 import { sqlite } from "../../src/sqlite";
@@ -1002,3 +1003,86 @@ Comment.query().whereMorphedTo("commentable", "videos");
 Comment.query().whereNotMorphedTo("commentable", Post);
 Post.query().whereAttachedTo(new User(undefined as never));
 User.query().whereNotAttachedTo(Post, "posts");
+
+// ---------------------------------------------------------------------------
+// Priority 3/4: instance extras, pivot events, cursor paging, rebuilds
+// ---------------------------------------------------------------------------
+
+// `load*` widen the instance with the aggregate alias, like `withCount` does.
+declare const loadedUser: InstanceType<typeof User>;
+const countedInstance = loadedUser.loadCount("posts");
+type LoadedCounted = Awaited<typeof countedInstance>;
+type _LoadedCounted = Expect<
+	LoadedCounted extends { postsCount: number } ? true : false
+>;
+const summedInstance = loadedUser.loadSum("posts", "views");
+type LoadedSummed = Awaited<typeof summedInstance>;
+type _LoadedSummed = Expect<
+	LoadedSummed extends { postsSumViews: number | null } ? true : false
+>;
+const maxedInstance = loadedUser.loadMax("posts", "views");
+type LoadedMaxed = Awaited<typeof maxedInstance>;
+type _LoadedMaxed = Expect<
+	LoadedMaxed extends { postsMaxViews: number | null } ? true : false
+>;
+// The relation/column names stay runtime-validated at the instance level (an
+// instance cannot see its subclass's relation map) — same rule as `user.load`.
+loadedUser.loadSum("posts", "views");
+// Pivot events fire on the parent class with a typed payload.
+const offPivot = User.onPivot("pivotAttached", (payload) => {
+	const relation: string = payload.relation;
+	const ids: readonly unknown[] | null = payload.ids;
+	const parent: InstanceType<typeof User> = payload.model;
+	void [relation, ids, parent];
+});
+offPivot();
+// @ts-expect-error — only the documented pivot events exist
+User.onPivot("pivotExploded", () => {});
+// Observer objects mix model and pivot handlers.
+User.observe({
+	creating: () => {},
+	pivotAttaching: (payload) => {
+		const relation: string = payload.relation;
+		void relation;
+	},
+});
+// @ts-expect-error — returning a non-boolean from a gate is a type error
+User.onPivot("pivotAttaching", () => "nope");
+
+// Cursor pagination supports multi-column orders and both directions.
+const cursorPromise = User.query().cursorPaginate(10, {
+	order: [{ column: "id" }, { column: "name", direction: "desc" }],
+});
+type CursorPage = Awaited<typeof cursorPromise>;
+type _CursorHasPrevious = Expect<
+	CursorPage extends { hasPrevious: boolean; nextCursor: string | null }
+		? true
+		: false
+>;
+// @ts-expect-error — order entries must name real columns
+User.query().cursorPaginate(10, { order: [{ column: "nope" }] });
+// @ts-expect-error — the legacy direction is asc/desc only
+User.query().cursorPaginate(10, { direction: "upwards" });
+
+// Dropping the whole schema is explicit and reports the dropped names.
+const migrator = new Migrator(orm, { migrations: [] });
+const droppedTables: Promise<string[]> = migrator.dropAllTables();
+void droppedTables;
+
+// Seeders can run as one transaction.
+void runSeeders(orm, [], { transaction: true });
+// @ts-expect-error — unknown seeder options are rejected
+void runSeeders(orm, [], { isolated: true });
+
+// The expanded Stringable surface is chainable and typed.
+const stringy = new Stringable("Hello World");
+const kebabbed: Stringable = stringy.kebab();
+const limited: Stringable = stringy.limit(5, "…");
+const padded: Stringable = stringy.padLeft(12, "-");
+const tail: Stringable = stringy.after("Hello ");
+const words: number = stringy.wordCount();
+const matches: boolean = stringy.is("Hello*");
+const regexHit: boolean = stringy.test(/World/);
+void [kebabbed, limited, padded, tail, words, matches, regexHit];
+// @ts-expect-error — `padLeft` takes a number then an optional string
+stringy.padLeft("12");

@@ -41,6 +41,7 @@
 		"typecheck:tests": "tsc -p tsconfig.test.json",
 		"build": "rm -rf dist && bun build src/index.ts src/sqlite.ts src/mysql.ts src/postgres.ts src/testing.ts --external kysely --external mysql2 --external pg --target=node --format=esm --sourcemap=external --outdir dist && tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist",
 		"test": "bun test",
+		"smoke": "node --no-warnings tests/node/smoke.mjs",
 		"bench": "bun run benchmarks/run.ts",
 		"prepublishOnly": "bun run check && bun run typecheck && bun test && bun run build"
 	},

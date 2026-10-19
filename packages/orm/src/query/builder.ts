@@ -184,6 +184,46 @@ function jsonContainsSqlite(
 	return sql`exists (select 1 from json_each(${atPath}) where json_each.value = ${value})`;
 }
 
+/**
+ * Overlap predicate per dialect: true when the column and the bound JSON
+ * value share an array element, an object key/value pair, or (for scalars) an
+ * equal value — the semantics of MySQL's `JSON_OVERLAPS`, reproduced on the
+ * dialects that lack the operator.
+ */
+function jsonOverlapSql(
+	dialect: "mysql" | "postgres" | "sqlite",
+	column: string,
+	value: unknown,
+): unknown {
+	const json = JSON.stringify(value);
+	if (dialect === "mysql") {
+		return sql`json_overlaps(${sql.ref(column)}, ${json})`;
+	}
+	if (dialect === "postgres") {
+		// `jsonb` has no `&&`: compare element by element and pair by pair.
+		return sql`((${sql.ref(column)})::jsonb = ${json}::jsonb or (jsonb_typeof((${sql.ref(column)})::jsonb) = 'array' and exists (select 1 from jsonb_array_elements((${sql.ref(column)})::jsonb) as element where ${json}::jsonb @> jsonb_build_array(element))) or (jsonb_typeof((${sql.ref(column)})::jsonb) = 'object' and jsonb_typeof(${json}::jsonb) = 'object' and exists (select 1 from jsonb_each((${sql.ref(column)})::jsonb) as pair where ${json}::jsonb -> pair.key = pair.value)))`;
+	}
+	// SQLite (JSON1): `json_each` walks the stored document.
+	return sql`(json_extract(${sql.ref(column)}, '$') = json_extract(${json}, '$') or (json_type(${sql.ref(column)}) = 'array' and json_type(${json}) = 'array' and exists (select 1 from json_each(${sql.ref(column)}) as element where exists (select 1 from json_each(${json}) as candidate where candidate.value = element.value))) or (json_type(${sql.ref(column)}) = 'object' and json_type(${json}) = 'object' and exists (select 1 from json_each(${sql.ref(column)}) as pair where exists (select 1 from json_each(${json}) as candidate where candidate.key = pair.key and candidate.value = pair.value))))`;
+}
+
+/** JSON-safe cursor value: bigints and dates survive as tagged strings. */
+function encodeCursorValue(value: unknown): unknown {
+	if (typeof value === "bigint") return { $bigint: value.toString() };
+	if (value instanceof Date) return { $date: value.toISOString() };
+	return value;
+}
+
+/** Inverse of {@link encodeCursorValue}. */
+function decodeCursorValue(value: unknown): unknown {
+	if (typeof value === "object" && value !== null) {
+		const record = value as { $bigint?: unknown; $date?: unknown };
+		if (typeof record.$bigint === "string") return BigInt(record.$bigint);
+		if (typeof record.$date === "string") return new Date(record.$date);
+	}
+	return value;
+}
+
 /** Parses `"posts as pending"` into its relation/alias parts. */
 function parseRelationRef(
 	reference: string,
@@ -330,6 +370,10 @@ function applyEntries(
  * Builds the FROM/WHERE part of a single-relation subquery, correlated to
  * `ownerTable`. `extra` runs after the correlation and soft-delete scope, so
  * callers can add constraints (or chain another EXISTS).
+ *
+ * `ref` is the name the related table is referenced by inside the subquery:
+ * the table itself, or an alias when the table name would shadow an enclosing
+ * table (self-referential relations at any nesting depth).
  */
 function relationSubquery<Sc extends Schema>(
 	orm: Orm<Sc>,
@@ -339,28 +383,31 @@ function relationSubquery<Sc extends Schema>(
 	descriptor: AnyRelationDescriptor,
 	relation: string,
 	softMode: SoftDeleteMode,
-	extra?: (sub: AnyBuilder) => AnyBuilder,
+	extra: ((sub: AnyBuilder) => AnyBuilder) | undefined,
+	ref: string | null,
 ): AnyBuilder {
 	const finish = (sub: AnyBuilder): AnyBuilder =>
 		extra === undefined ? sub : extra(sub);
+	/** `from` for the related table, aliased when `ref` says so. */
+	const from = (table: string): AnyBuilder =>
+		ref === null ? eb.selectFrom(table) : eb.selectFrom(`${table} as ${ref}`);
 	switch (descriptor.kind) {
 		case "hasMany":
 		case "hasOne": {
 			const relatedClass = descriptor.related?.();
 			const relatedTable = (relatedClass as { __table: string }).__table;
+			const name = ref ?? relatedTable;
 			const foreignKey = requireKey(
 				descriptor.foreignKey,
 				descriptor.kind,
 				relation,
 			);
-			let sub = eb
-				.selectFrom(relatedTable)
-				.whereRef(
-					`${relatedTable}.${foreignKey}`,
-					"=",
-					`${ownerTable}.${descriptor.localKey ?? "id"}`,
-				);
-			sub = applySoftScope(orm, sub, relatedClass, softMode, relatedTable);
+			let sub = from(relatedTable).whereRef(
+				`${name}.${foreignKey}`,
+				"=",
+				`${ownerTable}.${descriptor.localKey ?? "id"}`,
+			);
+			sub = applySoftScope(orm, sub, relatedClass, softMode, name);
 			const ofMany =
 				descriptor.kind === "hasOne" ? descriptor.ofMany : undefined;
 			if (ofMany !== undefined) {
@@ -370,14 +417,21 @@ function relationSubquery<Sc extends Schema>(
 						`Relation "${relation}": ofMany column "${ofMany.column}" does not exist on "${relatedTable}".`,
 					);
 				}
+				if (relatedMeta.primaryKey === null) {
+					throw new InvalidQueryError(
+						`Relation "${relation}": table "${relatedTable}" needs a primary key for one-of-many selection.`,
+					);
+				}
 				const softColumn = softDeleteColumnOf(orm, relatedClass);
 				sub = sub.where(
 					rawToKysely(
 						ofManyPredicateSql(orm.dialectKind, {
 							table: relatedTable,
+							outerTable: name,
 							column: ofMany.column,
 							aggregate: ofMany.aggregate,
 							foreignKey,
+							primaryKey: relatedMeta.primaryKey,
 							correlate: {
 								kind: "ref",
 								table: ownerTable,
@@ -396,6 +450,7 @@ function relationSubquery<Sc extends Schema>(
 		case "belongsTo": {
 			const relatedClass = descriptor.related?.();
 			const relatedTable = (relatedClass as { __table: string }).__table;
+			const name = ref ?? relatedTable;
 			const foreignKey = requireKey(
 				descriptor.foreignKey,
 				descriptor.kind,
@@ -405,34 +460,28 @@ function relationSubquery<Sc extends Schema>(
 				descriptor.ownerKey ??
 				orm.internalMeta(relatedTable as never).primaryKey ??
 				"id";
-			let sub = eb
-				.selectFrom(relatedTable)
-				.whereRef(
-					`${relatedTable}.${ownerKey}`,
-					"=",
-					`${ownerTable}.${foreignKey}`,
-				);
-			sub = applySoftScope(orm, sub, relatedClass, softMode, relatedTable);
+			let sub = from(relatedTable).whereRef(
+				`${name}.${ownerKey}`,
+				"=",
+				`${ownerTable}.${foreignKey}`,
+			);
+			sub = applySoftScope(orm, sub, relatedClass, softMode, name);
 			return finish(sub);
 		}
 		case "morphMany":
 		case "morphOne": {
 			const relatedClass = descriptor.related?.();
 			const relatedTable = (relatedClass as { __table: string }).__table;
+			const name = ref ?? relatedTable;
 			const { idColumn, typeColumn } = morphColumnsOf(descriptor, relation);
-			let sub = eb
-				.selectFrom(relatedTable)
+			let sub = from(relatedTable)
 				.whereRef(
-					`${relatedTable}.${idColumn}`,
+					`${name}.${idColumn}`,
 					"=",
 					`${ownerTable}.${descriptor.localKey ?? "id"}`,
 				)
-				.where(
-					`${relatedTable}.${typeColumn}`,
-					"=",
-					orm.morphAlias(ownerClass),
-				);
-			sub = applySoftScope(orm, sub, relatedClass, softMode, relatedTable);
+				.where(`${name}.${typeColumn}`, "=", orm.morphAlias(ownerClass));
+			sub = applySoftScope(orm, sub, relatedClass, softMode, name);
 			return finish(sub);
 		}
 		case "belongsToMany": {
@@ -460,13 +509,13 @@ function relationSubquery<Sc extends Schema>(
 				"belongsToMany",
 				relation,
 			);
-			let sub = eb
-				.selectFrom(relatedTable)
+			const name = ref ?? relatedTable;
+			let sub = from(relatedTable)
 				.innerJoin(pivot, (builder: AnyBuilder) =>
 					builder.onRef(
 						`${pivot}.${relatedPivotKey}`,
 						"=",
-						`${relatedTable}.${relatedPk}`,
+						`${name}.${relatedPk}`,
 					),
 				)
 				.whereRef(
@@ -474,7 +523,7 @@ function relationSubquery<Sc extends Schema>(
 					"=",
 					`${ownerTable}.${descriptor.localKey ?? "id"}`,
 				);
-			sub = applySoftScope(orm, sub, relatedClass, softMode, relatedTable);
+			sub = applySoftScope(orm, sub, relatedClass, softMode, name);
 			return finish(sub);
 		}
 		case "morphToMany": {
@@ -508,13 +557,13 @@ function relationSubquery<Sc extends Schema>(
 					`Relation "${relation}": morphToMany needs a morph name.`,
 				);
 			}
-			let sub = eb
-				.selectFrom(relatedTable)
+			const name = ref ?? relatedTable;
+			let sub = from(relatedTable)
 				.innerJoin(pivot, (builder: AnyBuilder) =>
 					builder.onRef(
 						`${pivot}.${relatedPivotKey}`,
 						"=",
-						`${relatedTable}.${relatedPk}`,
+						`${name}.${relatedPk}`,
 					),
 				)
 				.whereRef(
@@ -529,7 +578,7 @@ function relationSubquery<Sc extends Schema>(
 						descriptor.inverse === true ? relatedClass : ownerClass,
 					),
 				);
-			sub = applySoftScope(orm, sub, relatedClass, softMode, relatedTable);
+			sub = applySoftScope(orm, sub, relatedClass, softMode, name);
 			return finish(sub);
 		}
 		case "hasManyThrough":
@@ -544,6 +593,7 @@ function relationSubquery<Sc extends Schema>(
 			}
 			const throughClass = throughThunk() as { __table: string };
 			const throughTable = throughClass.__table;
+			const name = ref ?? relatedTable;
 			const throughMeta = orm.internalMeta(throughTable as never);
 			const secondLocalKey =
 				descriptor.secondLocalKey ?? throughMeta.primaryKey ?? "id";
@@ -557,13 +607,12 @@ function relationSubquery<Sc extends Schema>(
 				descriptor.kind,
 				relation,
 			);
-			let sub = eb
-				.selectFrom(relatedTable)
+			let sub = from(relatedTable)
 				.innerJoin(throughTable, (builder: AnyBuilder) =>
 					builder.onRef(
 						`${throughTable}.${secondLocalKey}`,
 						"=",
-						`${relatedTable}.${secondKey}`,
+						`${name}.${secondKey}`,
 					),
 				)
 				.whereRef(
@@ -571,7 +620,7 @@ function relationSubquery<Sc extends Schema>(
 					"=",
 					`${ownerTable}.${descriptor.localKey ?? "id"}`,
 				);
-			sub = applySoftScope(orm, sub, relatedClass, softMode, relatedTable);
+			sub = applySoftScope(orm, sub, relatedClass, softMode, name);
 			sub = applySoftScope(orm, sub, throughClass, softMode, throughTable);
 			return finish(sub);
 		}
@@ -582,7 +631,14 @@ function relationSubquery<Sc extends Schema>(
 	}
 }
 
-/** Compiles one EXISTS step of a (possibly nested) `whereHas` path. */
+/**
+ * Compiles one EXISTS step of a (possibly nested) `whereHas` path.
+ *
+ * `ownerTable` is the reference an enclosing query uses for the owner table
+ * (an alias when that level was aliased). A step whose related table has the
+ * same name is aliased (`users__rel_<depth>`) so nested, self-referential
+ * paths cannot shadow an enclosing table.
+ */
 function relationExists<Sc extends Schema>(
 	orm: Orm<Sc>,
 	dialect: DialectKind,
@@ -593,9 +649,15 @@ function relationExists<Sc extends Schema>(
 	entries: readonly WhereEntry[],
 	softMode: SoftDeleteMode,
 	onlyMorphTypes?: readonly string[],
+	depth = 0,
 ): unknown {
 	const step = steps[0]!;
 	const rest = steps.slice(1);
+	const alias =
+		step.relatedTable === ownerTable
+			? `${step.relatedTable}__rel_${depth}`
+			: null;
+	const reference = alias ?? step.relatedTable;
 	if (step.descriptor.kind === "morphTo") {
 		if (rest.length > 0) {
 			throw new InvalidQueryError(
@@ -625,20 +687,24 @@ function relationExists<Sc extends Schema>(
 				continue;
 			}
 			const relatedTable = (modelClass as { __table: string }).__table;
+			// The alternative's table may shadow an enclosing table too.
+			const ref =
+				relatedTable === ownerTable
+					? `${relatedTable}__rel_${depth}`
+					: relatedTable;
 			const ownerKey =
 				step.descriptor.ownerKey ??
 				orm.internalMeta(relatedTable as never).primaryKey ??
 				"id";
-			let sub = eb
-				.selectFrom(relatedTable)
+			let sub = (
+				ref === relatedTable
+					? eb.selectFrom(relatedTable)
+					: eb.selectFrom(`${relatedTable} as ${ref}`)
+			)
 				.select(sql`1`.as("one"))
-				.whereRef(
-					`${relatedTable}.${ownerKey}`,
-					"=",
-					`${ownerTable}.${idColumn}`,
-				);
-			sub = applySoftScope(orm, sub, modelClass, softMode, relatedTable);
-			sub = applyEntries(sub, entries, dialect, relatedTable);
+				.whereRef(`${ref}.${ownerKey}`, "=", `${ownerTable}.${idColumn}`);
+			sub = applySoftScope(orm, sub, modelClass, softMode, ref);
+			sub = applyEntries(sub, entries, dialect, ref);
 			alternatives.push(
 				eb.and([
 					eb(eb.ref(`${ownerTable}.${typeColumn}`), "=", alias),
@@ -651,21 +717,22 @@ function relationExists<Sc extends Schema>(
 		}
 		return alternatives.length === 1 ? alternatives[0] : eb.or(alternatives);
 	}
-	const relatedTable = step.relatedTable;
 	const extra =
 		rest.length === 0
-			? (sub: AnyBuilder) => applyEntries(sub, entries, dialect, relatedTable)
+			? (sub: AnyBuilder) => applyEntries(sub, entries, dialect, reference)
 			: (sub: AnyBuilder) =>
 					sub.where((eb2: AnyBuilder) =>
 						relationExists(
 							orm,
 							dialect,
 							eb2,
-							relatedTable,
+							reference,
 							step.relatedClass,
 							rest,
 							entries,
 							softMode,
+							undefined,
+							depth + 1,
 						),
 					);
 	const sub = relationSubquery(
@@ -677,6 +744,7 @@ function relationExists<Sc extends Schema>(
 		step.path,
 		softMode,
 		extra,
+		alias,
 	);
 	return eb.exists(sub.select(sql`1`.as("one")));
 }
@@ -1550,28 +1618,16 @@ export class QueryBuilder<
 	}
 
 	/**
-	 * JSON overlap — does the column share any element/key with `value`.
-	 * MySQL (`JSON_OVERLAPS`) and PostgreSQL (`&&`) only; SQLite throws.
+	 * JSON overlap — does the column share any element/key with `value`
+	 * (MySQL `JSON_OVERLAPS` semantics on every dialect). Scalars compare by
+	 * equality, arrays by shared elements, objects by shared key/value pairs.
 	 */
 	whereJsonOverlaps(column: ColumnRef<S, T, J>, value: unknown): this {
 		this.#assertColumn(column);
 		const dialect = this.orm.dialectKind;
-		if (dialect === "sqlite") {
-			throw new InvalidQueryError(
-				"whereJsonOverlaps(): SQLite has no JSON overlap operator (use whereJsonContains with an explicit element).",
-			);
-		}
 		return this.#pushWhere("and", {
 			kind: "custom",
-			build: () => {
-				if (dialect === "mysql") {
-					return sql`json_overlaps(${sql.ref(column)}, ${JSON.stringify(value)})`;
-				}
-				// PostgreSQL has no jsonb `&&`; MySQL's JSON_OVERLAPS equals
-				// "containment in either direction".
-				const json = JSON.stringify(value);
-				return sql`((${sql.ref(column)})::jsonb @> ${json}::jsonb or (${sql.ref(column)})::jsonb <@ ${json}::jsonb)`;
-			},
+			build: () => jsonOverlapSql(dialect, column, value) as never,
 		});
 	}
 
@@ -2896,10 +2952,26 @@ export class QueryBuilder<
 		if (typeof target === "function") {
 			return { typeColumn, idColumn, alias, key: undefined };
 		}
+		const keyColumn = this.#primaryKeyOf(cls, caller, relation) ?? "id";
 		const key = (target as unknown as { get(column: string): unknown }).get(
-			"id",
+			keyColumn,
 		);
 		return { typeColumn, idColumn, alias, key };
+	}
+
+	/** Primary key declared by a related model class, or `null`. */
+	#primaryKeyOf(
+		relatedClass: unknown,
+		caller: string,
+		relation: string,
+	): string | null {
+		const table = (relatedClass as { __table?: string } | undefined)?.__table;
+		if (typeof table !== "string") {
+			throw new InvalidQueryError(
+				`${caller}(${JSON.stringify(relation)}): the related model is not bound to a table.`,
+			);
+		}
+		return this.orm.internalMeta(table as never).primaryKey;
 	}
 
 	#attachedTo(
@@ -2941,7 +3013,10 @@ export class QueryBuilder<
 					descriptor.kind,
 					name,
 				);
-				const ownerKey = descriptor.ownerKey ?? "id";
+				const ownerKey =
+					descriptor.ownerKey ??
+					this.#primaryKeyOf(descriptor.related?.(), caller, name) ??
+					"id";
 				const value = read(ownerKey);
 				if (negate) {
 					this.whereNot((group: WhereGroup<S, T, J>) => {
@@ -2966,11 +3041,17 @@ export class QueryBuilder<
 			case "hasManyThrough":
 			case "hasOneThrough": {
 				// The target is attached through this relation: constrain the
-				// related side to the target's primary key (assumed `id`).
-				const value = read("id");
+				// related side to the target's real primary key.
+				const relatedKey = this.#primaryKeyOf(relatedClass, caller, name);
+				if (relatedKey === null) {
+					throw new InvalidQueryError(
+						`${caller}(${JSON.stringify(name)}): the related model declares no primary key.`,
+					);
+				}
+				const value = read(relatedKey);
 				const callback = (query: unknown): void => {
 					(query as { where(column: string, value: unknown): unknown }).where(
-						"id",
+						relatedKey,
 						value,
 					);
 				};
@@ -3583,8 +3664,11 @@ export class QueryBuilder<
 	}
 
 	/**
-	 * Cursor pagination on one ordered column (primary key by default).
-	 * Only forward cursors are emitted; pass `options.cursor` to continue.
+	 * Cursor (key-set) pagination — no `OFFSET`, so pages stay stable while
+	 * rows are inserted. Order by one column (`column`/`direction`, the
+	 * primary key by default) or several (`order`). The returned
+	 * `nextCursor` walks forward and `prevCursor` back: feed either back in
+	 * as `options.cursor`, using the same call, to move in that direction.
 	 */
 	async cursorPaginate<C extends ColumnNameOf<S, T>>(
 		perPage = 15,
@@ -3592,6 +3676,10 @@ export class QueryBuilder<
 			readonly cursor?: string | null;
 			readonly column?: C;
 			readonly direction?: "asc" | "desc";
+			readonly order?: ReadonlyArray<{
+				readonly column: C;
+				readonly direction?: "asc" | "desc";
+			}>;
 		} = {},
 	): Promise<CursorPaginated<ResultOf<S, T, M, Loaded, Sel>>> {
 		if (!Number.isInteger(perPage) || perPage <= 0) {
@@ -3600,55 +3688,141 @@ export class QueryBuilder<
 			);
 		}
 		const meta = this.orm.internalMeta(this.tableName);
-		const column = options.column ?? (meta.primaryKey as C | null);
-		if (column === null || column === undefined) {
-			throw new InvalidQueryError(
-				`cursorPaginate(): table "${this.tableName}" declares no primary key; pass an explicit column.`,
+		const orders: Array<{ column: string; direction: "asc" | "desc" }> = [];
+		if (options.order !== undefined && options.order.length > 0) {
+			for (const entry of options.order) {
+				if (entry.column === undefined || entry.column === null) {
+					throw new InvalidQueryError(
+						"cursorPaginate(): every `order` entry needs a column.",
+					);
+				}
+				orders.push({
+					column: entry.column,
+					direction: entry.direction ?? "asc",
+				});
+			}
+		} else {
+			const column = options.column ?? (meta.primaryKey as C | null);
+			if (column === null || column === undefined) {
+				throw new InvalidQueryError(
+					`cursorPaginate(): table "${this.tableName}" declares no primary key; pass an explicit column.`,
+				);
+			}
+			orders.push({ column, direction: options.direction ?? "asc" });
+		}
+		const incoming = options.cursor ?? null;
+		const decoded =
+			incoming === null
+				? { values: null as unknown[] | null, pointsToNext: true }
+				: this.#decodeCursor(incoming, orders.length);
+		const pointsToNext = decoded.pointsToNext;
+		const points = decoded.values;
+		const flip = (direction: "asc" | "desc"): "asc" | "desc" =>
+			direction === "asc" ? "desc" : "asc";
+		let query = this.clone().reorder();
+		for (const order of orders) {
+			query = query.orderBy(
+				order.column as never,
+				// Walking backwards fetches the previous window in reverse, so
+				// the trimmed rows can be reversed into natural order.
+				(pointsToNext ? order.direction : flip(order.direction)) as never,
 			);
 		}
-		const direction = options.direction ?? "asc";
-		let query = this.clone().reorder(column, direction);
-		if (options.cursor !== undefined && options.cursor !== null) {
-			let decoded: unknown;
-			try {
-				decoded = JSON.parse(
-					Buffer.from(options.cursor, "base64url").toString("utf8"),
-				);
-			} catch {
-				throw new InvalidQueryError(
-					"cursorPaginate(): the cursor is malformed.",
-				);
-			}
-			const value = decoded as { value?: unknown };
-			if (!value || typeof value !== "object" || !("value" in value)) {
-				throw new InvalidQueryError(
-					"cursorPaginate(): the cursor is malformed.",
-				);
-			}
-			query = query.where(
-				column as never,
-				(direction === "asc" ? ">" : "<") as never,
-				value.value as never,
-			);
+		if (points !== null) {
+			query = query.where((group: WhereGroup<S, T, J>) => {
+				for (let i = 0; i < orders.length; i += 1) {
+					const entry = orders[i]!;
+					const clause = (inner: WhereGroup<S, T, J>): void => {
+						for (let k = 0; k < i; k += 1) {
+							inner.where(orders[k]!.column as never, points[k] as never);
+						}
+						const ascending = entry.direction === "asc";
+						const operator = pointsToNext === ascending ? ">" : "<";
+						inner.where(
+							entry.column as never,
+							operator as never,
+							points[i] as never,
+						);
+					};
+					if (i === 0) group.where(clause);
+					else group.orWhere(clause);
+				}
+			});
 		}
 		const rows = await query.limit(perPage + 1).get();
-		const hasMore = rows.length > perPage;
-		const data = Collection.make(rows.all().slice(0, perPage));
-		const last = data[data.length - 1];
-		const nextCursor =
-			hasMore && last !== undefined
-				? Buffer.from(
-						JSON.stringify({ value: this.#readColumn(last as object, column) }),
-						"utf8",
-					).toString("base64url")
-				: null;
+		const overflow = rows.length > perPage;
+		const fetched = rows.all().slice(0, perPage);
+		const window = pointsToNext ? fetched : [...fetched].reverse();
+		const data = Collection.make(window);
+		const keyAt = (row: object | undefined): unknown[] | null =>
+			row === undefined
+				? null
+				: orders.map((order) => this.#readColumn(row, order.column));
+		const lastKey = keyAt(window[window.length - 1] as object | undefined);
+		const firstKey = keyAt(window[0] as object | undefined);
+		let nextCursor: string | null = null;
+		let prevCursor: string | null = null;
+		if (pointsToNext) {
+			if (overflow && lastKey !== null) {
+				nextCursor = this.#encodeCursor(lastKey, true);
+			}
+			if (incoming !== null && firstKey !== null) {
+				prevCursor = this.#encodeCursor(firstKey, false);
+			}
+		} else {
+			if (lastKey !== null) nextCursor = this.#encodeCursor(lastKey, true);
+			if (overflow && firstKey !== null) {
+				prevCursor = this.#encodeCursor(firstKey, false);
+			}
+		}
 		return {
 			data,
 			perPage,
 			nextCursor,
-			prevCursor: null,
-			hasMore,
+			prevCursor,
+			hasMore: pointsToNext ? overflow : nextCursor !== null,
+			hasPrevious: prevCursor !== null,
 		};
+	}
+
+	/** Encodes a cursor: the key values plus which way they point. */
+	#encodeCursor(values: readonly unknown[], pointsToNext: boolean): string {
+		return Buffer.from(
+			JSON.stringify({
+				v: values.map(encodeCursorValue),
+				n: pointsToNext,
+			}),
+			"utf8",
+		).toString("base64url");
+	}
+
+	/** Decodes a cursor produced by {@link #encodeCursor}. */
+	#decodeCursor(
+		cursor: string,
+		width: number,
+	): { values: unknown[]; pointsToNext: boolean } {
+		let decoded: unknown;
+		try {
+			decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+		} catch {
+			throw new InvalidQueryError("cursorPaginate(): the cursor is malformed.");
+		}
+		if (typeof decoded !== "object" || decoded === null) {
+			throw new InvalidQueryError("cursorPaginate(): the cursor is malformed.");
+		}
+		const record = decoded as { v?: unknown; n?: unknown; value?: unknown };
+		let values: unknown[];
+		if (Array.isArray(record.v)) values = record.v.map(decodeCursorValue);
+		// Cursors written by the single-column form of the API.
+		else if ("value" in record) values = [decodeCursorValue(record.value)];
+		else
+			throw new InvalidQueryError("cursorPaginate(): the cursor is malformed.");
+		if (values.length !== width) {
+			throw new InvalidQueryError(
+				`cursorPaginate(): the cursor holds ${values.length} value(s) but this ordering needs ${width}.`,
+			);
+		}
+		return { values, pointsToNext: record.n !== false };
 	}
 
 	/** Iterates rows in key-set chunks (no OFFSET drift). */
@@ -4214,6 +4388,8 @@ export class QueryBuilder<
 						`withExists(${JSON.stringify(exists.relation)}): relation has no target table.`,
 					);
 				}
+				const alias =
+					relatedTable === this.tableName ? `${relatedTable}__rel_0` : null;
 				const sub = relationSubquery(
 					this.orm,
 					eb,
@@ -4227,8 +4403,9 @@ export class QueryBuilder<
 							inner,
 							exists.constraint.wheres,
 							this.orm.dialectKind,
-							relatedTable,
+							alias ?? relatedTable,
 						),
+					alias,
 				).select(sql`1`.as("one"));
 				return eb.exists(sub).as(exists.alias);
 			});
@@ -4356,6 +4533,10 @@ export class QueryBuilder<
 				`withCount(${JSON.stringify(count.relation)}): relation has no target table.`,
 			);
 		}
+		const alias =
+			relatedTable === (this.tableName as string)
+				? `${relatedTable}__rel_0`
+				: null;
 		const sub = relationSubquery(
 			this.orm,
 			eb,
@@ -4369,8 +4550,9 @@ export class QueryBuilder<
 					inner,
 					count.constraint.wheres,
 					this.orm.dialectKind,
-					relatedTable,
+					alias ?? relatedTable,
 				),
+			alias,
 		);
 		return sub.select((eb2: AnyBuilder) => eb2.fn.countAll().as("count"));
 	}
@@ -4392,6 +4574,11 @@ export class QueryBuilder<
 				`with${aggregate.kind}(${JSON.stringify(aggregate.relation)}): relation has no target table.`,
 			);
 		}
+		const alias =
+			relatedTable === (this.tableName as string)
+				? `${relatedTable}__rel_0`
+				: null;
+		const name = alias ?? relatedTable;
 		const sub = relationSubquery(
 			this.orm,
 			eb,
@@ -4405,10 +4592,11 @@ export class QueryBuilder<
 					inner,
 					aggregate.constraint.wheres,
 					this.orm.dialectKind,
-					relatedTable,
+					name,
 				),
+			alias,
 		);
-		const column = `${relatedTable}.${aggregate.column}`;
+		const column = `${name}.${aggregate.column}`;
 		return sub.select((eb2: AnyBuilder) =>
 			eb2.fn[aggregate.kind](column).as("value"),
 		);

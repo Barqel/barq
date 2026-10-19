@@ -341,6 +341,11 @@ async function loadRelation(
 				`Relation "${name}": ofMany column "${ofMany.column}" does not exist on "${relatedTable}".`,
 			);
 		}
+		if (ofMany !== undefined && relatedMeta.primaryKey === null) {
+			throw new InvalidQueryError(
+				`Relation "${name}": table "${relatedTable}" needs a primary key for one-of-many selection.`,
+			);
+		}
 		const keys = distinctKeys(parents, localKey);
 		const softColumn = softDeleteColumnOf(orm, relatedClass);
 		const children =
@@ -366,6 +371,7 @@ async function loadRelation(
 											column: ofMany.column,
 											aggregate: ofMany.aggregate,
 											foreignKey,
+											primaryKey: relatedMeta.primaryKey as string,
 											correlate: {
 												kind: "ref",
 												table: relatedTable,

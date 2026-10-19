@@ -232,13 +232,14 @@ export class Migrator<S extends Schema> {
 	}
 
 	/**
-	 * Drops **every table in the database** and re-runs all migrations
-	 * (Eloquent's `migrate:fresh`). Destructive by design — point it at a
-	 * scratch database. PostgreSQL drops with `cascade`; MySQL disables
-	 * foreign-key checks around the drops.
+	 * Drops **every table in the database** and returns their names.
+	 *
+	 * Destructive and dialect-aware: PostgreSQL drops with `cascade`, MySQL
+	 * disables foreign-key checks around the drops. Table names come from
+	 * driver introspection and are validated before interpolating.
+	 * `fresh()` is built on this; call it directly when you only need the drop.
 	 */
-	async fresh(): Promise<MigrateResult> {
-		await this.ensureTable();
+	async dropAllTables(): Promise<string[]> {
 		const tables = await this.#orm.executor().introspection.getTables();
 		const names = tables
 			.map((table) => table.name)
@@ -262,6 +263,17 @@ export class Migrator<S extends Schema> {
 				await this.#orm.raw("set foreign_key_checks = 1");
 			}
 		}
+		return names;
+	}
+
+	/**
+	 * Drops **every table in the database** and re-runs all migrations
+	 * (Eloquent's `migrate:fresh`). Destructive by design — point it at a
+	 * scratch database or call `dropAllTables()` explicitly.
+	 */
+	async fresh(): Promise<MigrateResult> {
+		await this.ensureTable();
+		await this.dropAllTables();
 		return this.migrate();
 	}
 

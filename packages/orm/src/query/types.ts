@@ -300,12 +300,18 @@ export type RelationValueOf<D, Extra = unknown> = D extends {
 		? (TM[keyof TM & string] extends infer C ? InstanceOf<C> : never) | null
 		: (InstanceOf<RelatedClassOf<D>> & Extra) | null;
 
-type PrevDepth<D extends number> = D extends 3 ? 2 : D extends 2 ? 1 : 0;
+type PrevDepth<D extends number> = D extends 4
+	? 3
+	: D extends 3
+		? 2
+		: D extends 2
+			? 1
+			: 0;
 
 /** Every valid eager-load path for a relations map, up to 3 levels deep. */
 export type AllRelationPaths<
 	R,
-	Depth extends 0 | 1 | 2 | 3 = 3,
+	Depth extends 0 | 1 | 2 | 3 | 4 = 4,
 > = Depth extends 0
 	? never
 	: {
@@ -469,6 +475,23 @@ export type ColumnValueOfModel<M, C extends string> = M extends {
 export type AggregateKeyOf<P extends string, Suffix extends string> =
 	AliasOf<P> extends never ? `${RelationRefOf<P>}${Suffix}` : AliasOf<P>;
 
+/** Keys contributed to a model instance by `loadCount(...)`. */
+export type CountExtrasOf<P extends string> = {
+	readonly [K in P as AggregateKeyOf<K, "Count">]: number;
+};
+
+/** Keys contributed to a model instance by `loadSum`/`loadAvg`/`loadMin`/`loadMax`. */
+export type AggregateExtrasOf<
+	P extends string,
+	C extends string,
+	K extends AggregateKind,
+> = {
+	readonly [Key in P as AggregateKeyOf<
+		Key,
+		`${Capitalize<K>}${Capitalize<C>}`
+	>]: number | null;
+};
+
 /** Result value of `withSum`/`withAvg`/`withMin`/`withMax`. */
 export type RelationAggregateResult<
 	M,
@@ -565,9 +588,12 @@ export interface SimplePaginated<R> {
 export interface CursorPaginated<R> {
 	data: Collection<R>;
 	perPage: number;
+	/** Cursor for the next page (`null` on the last page). */
 	nextCursor: string | null;
+	/** Cursor for the previous page (`null` on the first page). */
 	prevCursor: string | null;
 	hasMore: boolean;
+	hasPrevious: boolean;
 }
 
 /** Insert result — `id` is present for auto-increment / returning dialects. */

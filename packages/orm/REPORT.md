@@ -54,7 +54,8 @@ called out as **not verified** rather than assumed.
 - Set operations: `union`/`unionAll` (same `Orm` instance required; column
   lists must line up; results hydrate through the base query's plan).
 - Pagination: `paginate` (total), `simplePaginate` (no total), `cursorPaginate`
-  (forward-only keyset), `chunk`, `chunkById`, `lazy`, `lazyById`, `cursor`.
+  (bidirectional keyset, single- or multi-column), `chunk`, `chunkById`,
+  `lazy`, `lazyById`, `cursor`.
 - Terminals: `get`, `first`, `firstOrFail`, `firstWhere`, `value`, `sole`,
   `soleValue`, `find`, `findOrFail`, `findMany`, `pluck`, `exists`,
   `doesntExist`, `count`, `sum`, `avg`, `min`, `max`, `toSQL`.
@@ -124,15 +125,16 @@ called out as **not verified** rather than assumed.
   type-checked against the related model (`hasMany(() => Post, "nope")` is a
   compile error; proven in the type tests).
 - One-of-many relations: `latestOfMany`/`oldestOfMany`/`ofMany(() => Post,
-  "userId", "views", "max")` build a `hasOne` selecting the extreme row per
-  parent; `belongsTo` accepts `withDefault`/`withDefaultFor` to attach a
-  placeholder owner when the foreign key dangles.
+  "userId", "views", "max")` build a `hasOne` selecting exactly one extreme row
+  per parent (deterministic primary-key tiebreak, reused by `whereHas` and the
+  relation aggregates); `belongsTo` accepts `withDefault`/`withDefaultFor` to
+  attach a placeholder owner when the foreign key dangles.
 - Morph aliases resolve as `static morphAlias` → global `orm.morphMap({…})` →
   table name; `orm.morphClass(value)` maps an alias back to its class and
   `orm.morphMapEntries()` lists the registered map. `morphToMany` pivots also
   expose the `${name}Type` column.
 - `with("posts", "posts.author", "profile")` — nested paths, typed results,
-  merged per relation (no intersecting array types), 3 levels deep.
+  merged per relation (no intersecting array types), 4 levels deep.
   Eager loading costs one batched statement per relation per level; morph-to
   adds one per concrete type and constrained through relations add one.
 - Constrained eager loading: `with({ posts: (q) => q.where("published", true) })`
@@ -208,7 +210,7 @@ Hierarchy under `BarqError`: `QueryError` (per-dialect translation),
 - MySQL (`mysql2`) and PostgreSQL (`pg`) — optional peer dependencies, lazily
   imported. SQL generation is covered by compile-only tests and the shared
   conformance suite is **verified live** against MySQL 8.4.11 and PostgreSQL
-  16.15 and 18.6 (21 tests each). The entry points stay env-gated for local runs;
+  16.15 and 18.6 (33 tests each). The entry points stay env-gated for local runs;
   `.github/workflows/orm.yml` provisions both engines as service containers and
   runs the entire suite with both URLs configured.
 - SQLite BigInt mode enables `safeIntegers` automatically before the driver is
@@ -295,6 +297,65 @@ Hierarchy under `BarqError`: `QueryError` (per-dialect translation),
   `belongsToMany(..., { using })`, custom pivot hydration with casts, and
   cast-aware `attach`/`updateExistingPivot`.
 
+### 1.14 Priority-3/4 gap-closing wave (completed)
+
+Every gap that was still open after §1.13 was closed in code, tests, docs and
+live verification:
+
+- **Exact one-of-many.** `whereHas`, `withCount`/`withSum`/`withAvg`/`withMin`/
+  `withMax` and manager `query()` now use
+  `related.<pk> = (select inner.<pk> … order by inner.<column> <dir>, inner.<pk>
+  <dir> limit 1)` instead of `= max(...)`, so a tied extreme matches exactly one
+  row (the same primary-key tie-break eager loading uses). A related table
+  without a primary key raises `InvalidQueryError`; `primaryKey` can be passed
+  explicitly.
+- **`whereAttachedTo` uses real primary keys.** `belongsTo` defaults its owner
+  key to the related model's primary key, and every other relation kind
+  constrains on the related model's actual primary key (morph targets too)
+  through a shared `#primaryKeyOf` helper.
+- **Typed instance aggregates.** `loadCount`, `loadSum`, `loadAvg`, `loadMin`,
+  `loadMax` and `loadAggregate` return `this & CountExtrasOf<P>` /
+  `this & AggregateExtrasOf<P, C, K>` with alias support
+  (`loadCount("posts as pinned")` → `pinnedCount`) and `number | null` values.
+- **Pruning fires model events.** `prune()` deletes per instance inside its
+  chunk loop, so `deleting`/`deleted`/`trashed` run and a `deleting` listener
+  can cancel a row.
+- **Explicit `Migrator.dropAllTables()`** returns the dropped table names
+  (PostgreSQL `cascade`, MySQL toggles `foreign_key_checks`, names validated
+  against the identifier pattern) and backs `fresh()`.
+- **Pivot events.** `pivotAttaching`/`pivotAttached`,
+  `pivotDetaching`/`pivotDetached`, `pivotUpdating`/`pivotUpdated` fire on the
+  parent model class with a typed `{ model, relation, ids, attributes }`
+  payload; the `…ing` gates cancel the write. `User.onPivot(event, listener)`
+  and mixed observer objects are typed, and `sync`/`toggle` inherit the events
+  from `attach`/`detach`.
+- **Bidirectional, multi-column cursor pagination.** `cursorPaginate(perPage, {
+  order: [...] })` supports several ordered columns; `nextCursor` and
+  `prevCursor` are direction-tagged (base64url JSON with tagged `bigint`/`Date`
+  values), the reverse page is fetched inverted and reversed back, and the
+  result reports `hasMore`/`hasPrevious`.
+- **Self-referential nested paths.** A step whose table shadows its owner is
+  aliased (`users__rel_<depth>`), fixing `whereHas("parent.parent")`,
+  `whereHas("children.children")` and self-referential
+  `withCount`/`withSum`/`withExists`.
+- **Cross-dialect JSON overlap.** `whereJsonOverlaps` follows MySQL's
+  `JSON_OVERLAPS` on every dialect — native operator on MySQL, `jsonb_typeof` +
+  `jsonb_array_elements` + `jsonb_each` on PostgreSQL, `json_each` on SQLite —
+  so a partial array overlap matches on all three.
+- **SQLite constraint drops.** `dropUnique` drops a named unique index
+  directly; `dropForeign` (and any named table-level constraint) rebuilds the
+  table from its `sqlite_master` statement with the clause stripped, copies the
+  rows, renames and recreates the indexes, toggling `foreign_keys` around the
+  swap.
+- **Relation depth 4.** `AllRelationPaths` walks relations up to depth 4.
+- **Expanded `Stringable`** (case conversion, padding, truncation, slicing,
+  search, mutation, `wordCount`).
+- **Transactional seeders.** `runSeeders(orm, seeders, { transaction: true })`
+  wraps the whole list in one transaction.
+- **Node runtime job.** `tests/node/smoke.mjs` runs the built and the packed
+  package under Node 24 against SQLite, MySQL and PostgreSQL; the new
+  `node-runtime` CI job runs it on every push.
+
 ---
 ## 2. Key decisions and rationale
 
@@ -323,7 +384,7 @@ Hierarchy under `BarqError`: `QueryError` (per-dialect translation),
 | 21 | Scope declarations use explicit helpers | TypeScript cannot contextually type a whole static initializer from the model base, and self-referential annotations can be circular. Helpers preserve literal names with a schema/table witness. |
 | 22 | `withWhereHas` registers the same callback for existence and eager loading | Matches Laravel semantics and avoids two divergent filters. |
 | 23 | Pivot hydration is eager-only; pivot constraints are manager-only | Pivot objects are per-pair artifacts of a batched load; managers read a flat related set. `wherePivot`/`orderByPivot` stay on the manager (ordering via a correlated `limit 1` subquery), never inside eager callbacks. |
-| 24 | One-of-many eager picks one row (pk tiebreak); `whereHas`/aggregates use `= extreme` | A relation can only return one row, while existence/count stay predicate-based (Eloquent's two flavors). Ties are documented rather than hidden. |
+| 24 | One-of-many selects exactly one row everywhere: the related primary key against an ordered `limit 1` subquery | A relation returns one row and existence/count agree with it, so a tied extreme can never double-count. A related table without a primary key is rejected loudly (`InvalidQueryError`). |
 | 25 | `morphedByMany` is the `morphToMany` descriptor with `inverse: true` | One pivot resolver instead of two; keys keep the declaring model's perspective and the type filter uses the related class's alias. |
 | 26 | Morph aliases resolve `static morphAlias` → global map → table name | Per-class overrides stay authoritative; the global map is the escape hatch for type strings written elsewhere. Unresolvable `morphTo` manager rows throw `InvalidQueryError` instead of guessing. |
 | 27 | Built-in casts coerce on `set`; parameterized names accept a small PHP-token subset | Write/read behavior matches Eloquent without shipping a date-formatting library; invalid names fail loudly at meta resolution. |
@@ -331,7 +392,11 @@ Hierarchy under `BarqError`: `QueryError` (per-dialect translation),
 | 29 | Foreign keys are table-level constraints with deterministic names on every dialect | MySQL parses and ignores inline `references`; naming them (`<table>_<column>_foreign`) makes `dropForeign` and live schema introspection reliable. |
 | 30 | Child connections are cached `Orm` instances sharing `OrmShared`; each owns its transaction ALS | Independent pools/transaction contexts per connection, with one listener/morph/macro registry for the whole application. |
 | 31 | Builder macros are bound in the constructor; model macros go on the prototype | Macro chains keep the concrete builder/instance as `this`; declaring methods on the prototype preserves normal instance dispatch and collision checks. |
-| 32 | `dropUnique`/`dropForeign` try constraint names then index names | The same API must remove PG constraints/indexes and MySQL FKs/indexes; SQLite cannot drop either, so it throws instead of silently doing nothing. |
+| 32 | `dropUnique`/`dropForeign` try constraint names then index names | The same API must remove PG constraints/indexes and MySQL FKs/indexes. SQLite drops a named unique index directly and rebuilds the table (copy → drop → rename → replay indexes, `foreign_keys` toggled around the swap) for a named constraint; only engine-auto-named constraints raise `SchemaError`. |
+| 33 | Pivot events fire on the parent model class (Eloquent parity), with `…ing` gates that cancel | Events describe the relation write the application made; a separate pivot-class listener registry would not match Eloquent and would double the API surface. `sync`/`toggle` inherit them by delegating to `attach`/`detach`. |
+| 34 | Cursors are opaque base64url JSON with tagged `bigint`/`Date` values | Reversible through `JSON.parse` without losing 64-bit keys or dates, and direction-tagged (`{ v, n }`) so `nextCursor`/`prevCursor` can be inverted for a backward page; the legacy `{ value }` payload still decodes. |
+| 35 | Self-referential nested steps alias the inner table (`<table>__rel_<depth>`) | Correlated `EXISTS`/aggregates need distinct aliases when a path revisits its own table; aliasing only the shadowed levels keeps normal SQL unchanged. |
+| 36 | `whereJsonOverlaps` reproduces MySQL `JSON_OVERLAPS` on every dialect | One documented semantic instead of three; PostgreSQL and SQLite compile to `jsonb_typeof`/`jsonb_array_elements`/`jsonb_each` and `json_each` expansions so partial array overlap matches like MySQL. |
 
 ---
 
@@ -357,6 +422,7 @@ src/
   schema/define.ts         defineSchema + type-level schema mapping
   schema/columns.ts        column descriptor builders
   schema/builder.ts        DDL DSL (create/drop/hasTable, timestamps, references)
+  schema/sqlite-rebuild.ts SQLite table-rebuild planner for named constraint drops
   model/model.ts           model factory, statics, scopes, loaders, dirty tracking, hydration
   model/casts.ts           built-in/encrypted/hashed/collection/stringable/enum/class casts
   model/events.ts          model events, observers, gate listeners, ALS suppression
@@ -374,7 +440,7 @@ package root
 
 tests/
   unit/sqlite-driver.test.ts        4 tests — driver + Kysely adapter smoke
-  unit/compile-sql.test.ts          35 tests — exact SQL/bindings per dialect
+  unit/compile-sql.test.ts          41 tests — exact SQL/bindings per dialect
   unit/bigint.test.ts                7 tests — schema mode, validation, row conversion
   integration/sqlite.test.ts        38 tests — full stack on live SQLite
   integration/eloquent.test.ts      37 tests — Eloquent-parity batches
@@ -383,15 +449,21 @@ tests/
   integration/bigint.test.ts         8 tests — full 64-bit range on live SQLite
   integration/parity.test.ts        31 tests — Priority-1 parity (pivot options and
                                     hydration, one-of-many, withDefault, morph map)
-  integration/dialect-suite.ts      21 tests — shared MySQL/PG conformance suite
-  integration/dialect-rehearsal.test.ts  21 tests — same suite on live SQLite
-  integration/mysql.test.ts         env-gated entry point (skips without URL)
-  integration/postgres.test.ts      env-gated entry point (skips without URL)
-  types/type-tests.ts               60 must-fail directives + shape assertions
+  integration/priority-2.test.ts    36 tests — Priority-2/3/4 runtime coverage on
+                                    live SQLite (SQLite constraint rebuild,
+                                    self-referential aliasing, transactional seeders)
+  integration/dialect-suite.ts      33 tests — shared MySQL/PG/SQLite conformance suite
+  integration/dialect-rehearsal.test.ts  33 tests — same suite on live SQLite
+  integration/mysql.test.ts         env-gated entry point (33 tests when URL is set)
+  integration/postgres.test.ts      env-gated entry point (33 tests when URL is set)
+  types/type-tests.ts               72 must-fail directives + shape assertions
+  node/smoke.mjs                    Node-runtime smoke: built and packed package
+                                    against SQLite, MySQL and PostgreSQL
 
-Source: 14,961 lines of TypeScript across 28 files (strict, ESM, no `any` in the
-public API). Tests: 7,148 lines across 13 TypeScript files (11 files executed by
-`bun test`; `dialect-suite.ts` is imported and `type-tests.ts` is compile-only).
+Source: 17,469 lines of TypeScript across 31 files (strict, ESM, no `any` in the
+public API). Tests: 9,314 lines across 14 TypeScript files plus the 314-line Node
+smoke script (12 files executed by `bun test`; `dialect-suite.ts` is imported and
+`type-tests.ts` is compile-only).
 
 ---
 
@@ -413,57 +485,77 @@ $ tsc -p tsconfig.test.json
 
 The second command compiles `src/**` + `tests/**` + `benchmarks/**` +
 `examples/**` including the type-test file: **every `@ts-expect-error` in the
-suite must be consumed for it to pass** — i.e. all 60 intended compile errors
+suite must be consumed for it to pass** — i.e. all 72 intended compile errors
 (unknown tables/columns/filters, wrong insert payloads, bad relation keys/paths,
 `with()` in row mode, unknown eager-load keys, non-numeric `increment`,
 morph-to aggregates/constraints, missing local-scope arguments, unknown scope
 names, pivot ids on the wrong manager shape, invalid `ofMany` directions,
 `morphedByMany` key mismatches, missing pivot columns in `wherePivot`, BigInt
-`number` misuse, …) fire exactly where expected, and every positive shape
-assertion holds.
+`number` misuse, unknown pivot events, non-boolean pivot gates, bad
+`cursorPaginate` columns/directions, unknown seeder options, bad `Stringable`
+arguments, …) fire exactly where expected, and every positive shape assertion
+holds — including the Priority-4 additions: `loadCount`/`loadSum`/`loadMax`
+returning the instance widened with `postsCount`/`postsSumViews`/`postsMaxViews`,
+typed `onPivot` payloads, `hasPrevious`/multi-column `cursorPaginate`,
+`dropAllTables(): Promise<string[]>`, `runSeeders(..., { transaction: true })`,
+and the expanded `Stringable` chain.
 
 ### 4.2 Lint and format
 
 ```
-$ bunx biome check --write .   # only when applying fixes
-Checked 46 files in 292ms. Fixed 2 files.
+$ bunx biome check --write src tests docs   # only when applying fixes
+Checked 45 files in 309ms. Fixed 1 file.
+Found 6 warnings.            # pre-existing style warnings, no errors
+$ echo $?
+0
 
 $ bun run check
 $ biome check .
-Checked 46 files in 234ms. No fixes applied.
+Checked 50 files in 228ms. No fixes applied.
+Found 6 warnings.
+$ echo $?
+0
 ```
 
 ### 4.3 Test suite
 
 ```
+$ bun test
+ 262 pass
+ 2 skip
+ 0 fail
+ 1163 expect() calls
+Ran 264 tests across 12 files. [2.01s]
+
 $ BARQ_ORM_MYSQL_URL=mysql://hassan-kerdash:…@127.0.0.1:3306/barq_orm_test \
   BARQ_ORM_PG_URL=postgres:///barq_orm_test?host=/var/run/postgresql \
   bun test
- 250 pass
+ 328 pass
  0 fail
- 1157 expect() calls
-Ran 250 tests across 11 files. [5.56s]
+ 1593 expect() calls
+Ran 328 tests across 12 files. [8.34s]
 
 $ BARQ_ORM_MYSQL_URL=mysql://root:secret@127.0.0.1:33306/barq_test \
   BARQ_ORM_PG_URL=postgres://postgres:secret@127.0.0.1:55432/barq_test \
   bun test
- 250 pass
+ 328 pass
  0 fail
- 1157 expect() calls
-Ran 250 tests across 11 files. [5.64s]
+ 1593 expect() calls
+Ran 328 tests across 12 files. [8.15s]
 ```
 
 The first run used the installed MySQL 8.4.11 and PostgreSQL 18.6 servers; the
 second used the same MySQL 8.4 and PostgreSQL 16.15 service-container images as
 `.github/workflows/orm.yml` (started locally with Podman). Both live server
-suites contributed 21 passing tests each in both runs. Without the two
-environment variables the same command is `208 pass, 2 skip, 0 fail`
-(210 tests, 905 assertions): only the env-gated dialect entry points skip.
-The count includes the 38-test SQLite suite, the 37-test Eloquent-parity
+suites contributed 33 passing tests each in both runs (the shared
+`runDialectSuite` and the SQLite rehearsal now carry 33 cases). Without the two
+environment variables the same command is `262 pass, 2 skip, 0 fail`
+(264 tests, 1163 assertions): only the env-gated dialect entry points skip.
+The total includes the 38-test SQLite suite, the 37-test Eloquent-parity
 suite, the 27-test advanced suite, a 7-test BigInt unit suite, an 8-test live
-BigInt suite, the 31-test Priority-1 parity suite, a 21-test rehearsal of the
-shared MySQL/PostgreSQL suite against SQLite, and 42 live dialect tests
-(21 MySQL + 21 PostgreSQL).
+BigInt suite, the 31-test Priority-1 parity suite, the 36-test Priority-2/3/4
+suite, a 33-test rehearsal of the shared dialect suite against SQLite, and 66
+live dialect tests (33 MySQL + 33 PostgreSQL).
 
 ### 4.4 Runnable example (live run, in-memory SQLite)
 
@@ -516,53 +608,54 @@ Median of 5 rounds after 50 warmup ops; each round runs the workload iterations 
 
 ```
 $ bun run build
-Bundled 156 modules in 24ms
-  index.js 0.35 MB / sqlite.js 6.43 KB / mysql.js 1.0 KB / postgres.js 0.98 KB / testing.js 0.34 MB (+ maps)
+$ echo $?
+0
+(index.js / sqlite.js / mysql.js / postgres.js / testing.js + source maps)
 (tsc --emitDeclarationOnly produced per-module .d.ts)
 
-$ bun pm pack --destination /tmp/opencode/orm-smoke-final/pack
-Total files: 69
-Shasum: 358cc26dda3156b9acf60613313e7d84767ad5df
-Integrity: sha512-EBouytGxNDl62[...]T4GLYD3Dpf/Og==
-Unpacked size: 2.66MB  Packed size: 0.48MB
+$ bun pm pack --destination /tmp/opencode/barq-pack
+Total files: 75
+Shasum: 256c99f6ec416ef1dd63b54111466b7594389f97
+Unpacked size: 3.0MB  Packed size: 0.56MB
 ```
 
-### 4.7 Packed-package smoke test on both runtimes and live dialects
+### 4.7 Node-runtime smoke — built and packed (`tests/node/smoke.mjs`)
 
-The tarball was extracted with its `kysely` dependency into a clean temp
-directory and exercised **against `dist/` only** — no source imports:
+The committed smoke script runs the whole core surface (DDL, model CRUD, eager
+loading, relation aggregates and typed `load*` extras, one-of-many ties, JSON
+paths, `belongsToMany` with pivot events and pivot extras, transactions and
+rollback, cursor paging in both directions, seeders, `dropAllTables`) against
+SQLite always, and against live MySQL/PostgreSQL when the URLs are present. It
+imports the **built `dist/`** by default and the **packed tarball** when
+`BARQ_ORM_PACKED=1`:
 
 ```
-$ (cd consumer && bun smoke.mjs)
-[bun 1.4.2] packed BigInt smoke OK
+$ bun run smoke                                  # built dist, SQLite (node --no-warnings tests/node/smoke.mjs)
+ok   sqlite
+ok   exports (dist)
 
-$ (cd consumer && /home/hassan-kerdash/.nvm/versions/node/v24.21.0/bin/node smoke.mjs)
-[node v24.21.0] packed BigInt smoke OK
+$ BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=… bun run smoke
+ok   sqlite
+ok   mysql
+ok   postgres
+ok   exports (dist)
 
-$ (cd consumer && bunx tsc --noEmit --strict --target ES2022 --module ESNext \
-    --moduleResolution Bundler --skipLibCheck packed-typecheck.ts)
-(no output — clean)
-
-$ (cd consumer && BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=… bun dialects.mjs)
-[mysql] packed live dialect BigInt smoke OK
-[postgres] packed live dialect BigInt smoke OK
-
-$ (cd consumer && BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=… \
-    /home/hassan-kerdash/.nvm/versions/node/v24.21.0/bin/node dialects.mjs)
-[mysql] packed live dialect BigInt smoke OK
-[postgres] packed live dialect BigInt smoke OK
+$ bun pm pack --destination /tmp/opencode/barq-pack
+$ (cd /tmp/opencode/barq-smoke                               # clean consumer
+   npm init -y && npm install --no-save /tmp/opencode/barq-pack/*.tgz mysql2 pg
+   cp packages/orm/tests/node/smoke.mjs .
+   BARQ_ORM_PACKED=1 BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=… node --no-warnings smoke.mjs)
+ok   sqlite
+ok   mysql
+ok   postgres
+ok   exports (packed tarball)
 ```
 
-The tarball was installed into a clean consumer that imports only
-`@barqel/barq-orm`; no source imports are involved. The SQLite smoke covers the
-full `bigint` range, auto-increment ids, model CRUD, eager relations, relation
-aggregates, raw SQL, `toSQL`, collections and transactional rollback. The
-separate packed type-check asserts `RowOf`/insert/aggregate shapes and rejects
-`number` for BigInt columns against the emitted declarations. The packed live
-dialect smoke ran against both live engines under both runtimes, using the
-PostgreSQL 16.15 and 18.6 servers; it covers a `MAX` signed 64-bit value, model
-insert ids, relation aggregates and raw SQL (which remains a decimal string on
-both server drivers), plus rollback and cleanup.
+The packed consumer imports only `@barqel/barq-orm` (+ `/sqlite`, `/mysql`,
+`/postgres`); no source imports are involved. The CI job `node-runtime` runs
+exactly these two steps on every push, on Node 24, against service containers.
+Earlier waves additionally ran an ad-hoc standalone type-check of the emitted
+declarations in a clean consumer (`tsc --noEmit --strict`), which stayed clean.
 
 ### 4.8 First hosted GitHub Actions run
 
@@ -601,6 +694,32 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
   `barq_test`, non-destructive to the local `hassan-kerdash` databases): same
   command → **58 pass / 0 fail**.
 
+### 4.10 Priority-3/4 live re-verification
+
+- Offline: `bun test` → **262 pass / 2 skip / 0 fail**, 264 tests across 12
+  files (1,163 expectations); `bun run typecheck` and `bun run typecheck:tests`
+  clean; `bun run check` reports 6 pre-existing style warnings and no errors
+  (exit 0).
+- Local MySQL 8.4.11 + PostgreSQL 18.6: `BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=…
+  bun test` → **328 pass / 0 fail** (1,593 expectations), i.e. the full suite
+  including 33 shared tests per engine.
+- Podman scratch databases (MySQL 8.4.11, PostgreSQL 16.15): same command →
+  **328 pass / 0 fail**.
+- Node runtime smoke (`bun run smoke`, i.e. `node --no-warnings
+  tests/node/smoke.mjs`): built `dist/` and the
+  packed tarball both report `ok sqlite`, `ok mysql`, `ok postgres`,
+  `ok exports` — see §4.7.
+- Every Priority-4 behaviour is asserted live on all three engines: one-of-many
+  tied extremes match exactly one row in predicates and aggregates (both
+  directions), `whereAttachedTo` uses the related table's real primary key,
+  typed `load*` extras, pruning firing `deleting`/`deleted`/`trashed`,
+  `dropAllTables()` returning the dropped names (and backing `fresh()`), pivot
+  events in order with cancelling gates and `withoutModelEvents` suppression,
+  bidirectional multi-column cursor paging (with BigInt/Date cursor values),
+  self-referential nested `whereHas`/`withCount` aliasing, cross-dialect JSON
+  overlap, and SQLite named-constraint drops (unique index drop + table
+  rebuild).
+
 ## 5. Test / verification strategy and results
 
 ### 5.1 What each layer proves
@@ -608,19 +727,20 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
 | Layer | How | Proves |
 | --- | --- | --- |
 | Unit — driver/adapter (4 tests) | live in-memory SQLite through the Kysely adapter | driver contract: DDL, `returning`, transactions, raw execution |
-| Unit — SQL compilation (35 tests) | `onQuery` capture with DummyDriver, per dialect | exact SQL text + bindings: select/insert/upsert/update/delete/joins/whereHas/`ilike`, aggregate subqueries and constraint callbacks, soft-delete SELECT/DML, `increment`/`decrement`, `inRandomOrder`/`whereNotBetween`/`orWhereNot`, integer raw lists (empty-list constants), `whereExists`/`selectSub`, `union`/`unionAll`, ofMany extreme predicates, morph alias filters (`morphToMany`/`morphedByMany`) and pivot-manager SQL (validated operators), MySQL `on duplicate key update values(...)` vs `on conflict (…) do update set excluded.*`, `?` vs `$n` |
+| Unit — SQL compilation (41 tests) | `onQuery` capture with DummyDriver, per dialect | exact SQL text + bindings: select/insert/upsert/update/delete/joins/whereHas/`ilike`, aggregate subqueries and constraint callbacks, soft-delete SELECT/DML, `increment`/`decrement`, `inRandomOrder`/`whereNotBetween`/`orWhereNot`, integer raw lists (empty-list constants), `whereExists`/`selectSub`, `union`/`unionAll`, ofMany extreme predicates (`= (select … limit 1)` with the primary-key tiebreak), morph alias filters (`morphToMany`/`morphedByMany`) and pivot-manager SQL (validated operators), MySQL `on duplicate key update values(...)` vs `on conflict (…) do update set excluded.*`, `?` vs `$n`, cross-dialect `whereJsonOverlaps` |
 | Unit — BigInt mode (7 tests) | `defineSchema` + row-plan conversion | global/per-column schema flags, validation, 64-bit string conversion, null/invalid passthrough |
 | Integration — SQLite (38 tests) | live `bun:sqlite` | full stack: CRUD, casts, fillable/hidden/dirty, pagination, aggregates, eager + nested + `withCount` + `whereHas` with **exactly 5 SELECTs** assertion, transactions (commit/rollback/savepoints/events/retry of a faked `SQLITE_BUSY`), migrations (batches, rollback, status), constraint-error translation, raw SQL |
 | Integration — BigInt (8 tests) | live `bun:sqlite` | full signed 64-bit range, per-column mode, filters/updates/plucks, auto-increment ids, increment overflow edge, raw SQL, eager relation keys, relation aggregates, model CRUD/PK lookup |
 | Integration — Eloquent parity (37 tests) | live `bun:sqlite` | increment/decrement, `firstOrCreate`/`updateOrCreate`, `getOriginal`/`replicate`, `withSum`/`withAvg`/`withMin`/`withMax`, nested/negated `whereHas`, constrained `with()`, event order/gates/observers/ALS suppression, soft deletes (scopes, eager loading, DML, gates, validation), polymorphic/through relations, accessors/mutators/casts/appends/visibility |
 | Integration — advanced parity (27 tests) | live `bun:sqlite` | collect.js collections on rows/models/results; relation managers (create/save/sync/pivot/toggle/through); instance loaders; global/local scopes; date/time/JSON/`whereAny`/`withExists`/`whereHasMorph`; cursor/lazy/chunk pagination; first-or variants; upsert helpers; lifecycle (`touch`/`fresh`/`push`/quiet/`$touches`); advanced casts |
 | Integration — Priority-1 parity (31 tests) | live `bun:sqlite` | pivot options (`withPivot`/`timestamps`/`as`) + eager pivot hydration (cloned per pair) + manager `wherePivot`/`wherePivotIn`/`orderByPivot`; `latestOfMany`/`oldestOfMany`/`ofMany` eager picks + `whereHas`/aggregate extremes + `withDefault`/`withDefaultFor`; `morphedByMany` both directions and global `orm.morphMap` resolution; `Model.destroy`/`createOrFirst`/instance `increment`/`toArray`/`append`; builder additions (`soleValue`, `doesntExist`, `inRandomOrder`, `whereNotBetween`, `whereExists`, `selectSub`, `union`, `whereIntegerInRaw`, `unless`, aggregate callbacks) |
+| Integration — Priority-2/3/4 (36 tests) | live `bun:sqlite` + shared dialect suite | SQLite named-constraint drop (unique index + table rebuild) and `dropColumn`; self-referential nested `whereHas`/`withCount` aliasing; transactional seeders; cast/blueprint/migrator/pruning/JSON/`whereAttachedTo`/pivot-cast behaviours on SQLite (the shared suite repeats them on MySQL/PG) |
 | Packed DTS consumer (`tsc --strict`) | clean temp install of the tarball; imports only `@barqel/barq-orm` | declarations resolve standalone; collection/scope/manager/cast/`Stringable`/BigInt public types are consumable without source |
-| Packed live dialect smoke (Bun + Node) | published `dist/` only, real MySQL/PostgreSQL servers | BigInt CRUD, max signed 64-bit value, insert ids, relation aggregates, raw SQL and transactions work from the packed artifact on both runtimes |
-| Compile-time — type tests (60 must-fail directives) | `tsc --noEmit` over must-fail + shape assertions | unknown tables/columns, wrong filter/insert/update types, join refs, fillable allow-list, relation paths, constrained `with()` keys, numeric-only increments, morph-to exclusions, accessor shapes, `with()` unavailable in row mode, PK types, relation-key constraints, collection result shapes, scopes and scope arguments, `RelationManagerOf`, pivot option typing (`withPivot` accessor names/columns, `morphedByMany` keys), `ofMany` direction literals, morph map entries, BigInt number/BigInt boundaries, statics |
-| Integration — MySQL (21 tests) | shared `runDialectSuite` against live MySQL 8.4.11 | DDL/types, CRUD, relations/eager loading, polymorphic/pivot relations (`morphedByMany`, pivot extras/timestamps, `wherePivotIn`/`orderByPivot`), one-of-many extremes and default owners, aggregates, upserts, soft deletes, transactions, savepoints, migrations, BigInt ids above 2^53 and raw SQL on the real engine |
-| Integration — PostgreSQL (21 tests) | shared `runDialectSuite` against live PostgreSQL 16.15 and 18.6 | the same conformance plan on both versions, including identity columns, `$n` placeholders, `returning`, per-pool int8 strings and advisory locks |
-| Integration — dialect rehearsal (21 tests) | the same `runDialectSuite` body on live `bun:sqlite` | keeps shared setup/parity assumptions exercised on every default run, including BigInt safe integers and pivot key hydration |
+| Node-runtime smoke (built + packed) | `tests/node/smoke.mjs` on Node 22/24, real MySQL/PostgreSQL servers, CI job `node-runtime` | the shipped artifact's core surface (DDL, CRUD, eager loading, aggregates and typed `load*` extras, one-of-many ties, JSON paths, pivot events and extras, transactions, bidirectional cursor paging, seeders, `dropAllTables`) works on Node, not just Bun |
+| Compile-time — type tests (72 must-fail directives) | `tsc --noEmit` over must-fail + shape assertions | unknown tables/columns, wrong filter/insert/update types, join refs, fillable allow-list, relation paths (now to depth 4), constrained `with()` keys, numeric-only increments, morph-to exclusions, accessor shapes, `with()` unavailable in row mode, PK types, relation-key constraints, collection result shapes, scopes and scope arguments, `RelationManagerOf`, pivot option typing (`withPivot` accessor names/columns, `morphedByMany` keys), `ofMany` direction literals, morph map entries, BigInt number/BigInt boundaries, statics, plus the Priority-4 surface: typed `load*` extras, typed `onPivot` payloads and gate returns, `cursorPaginate` columns/directions and `hasPrevious`, `dropAllTables`, `runSeeders` options and `Stringable` |
+| Integration — MySQL (33 tests) | shared `runDialectSuite` against live MySQL 8.4.11 | DDL/types, CRUD, relations/eager loading, polymorphic/pivot relations (`morphedByMany`, pivot extras/timestamps, `wherePivotIn`/`orderByPivot`), pivot events, one-of-many tie-exact extremes and default owners, typed `load*`, aggregates, upserts, soft deletes, transactions, savepoints, migrations (`fresh`/`dropAllTables`), bidirectional cursor paging, JSON paths/keys/length/overlaps, pruning, transactional seeders, BigInt ids above 2^53 and raw SQL on the real engine |
+| Integration — PostgreSQL (33 tests) | shared `runDialectSuite` against live PostgreSQL 16.15 and 18.6 | the same conformance plan on both versions, including identity columns, `$n` placeholders, `returning`, per-pool int8 strings, advisory locks, JSON-overlap subqueries and bidirectional cursor paging |
+| Integration — dialect rehearsal (33 tests) | the same `runDialectSuite` body on live `bun:sqlite` | keeps shared setup/parity assumptions exercised on every default run, including BigInt safe integers, pivot key hydration, the rebuild-based constraint drops and BigInt/Date cursor values |
 
 ### 5.2 Standout verified behaviors
 
@@ -639,7 +759,10 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
   the eager load.
 - `whereHasMorph` filters through concrete morph aliases and `"*"`; invalid
   target relations throw.
-- Cursor pagination resumes from an opaque `nextCursor`, `lazyById`/`chunkById`
+- Cursor pagination walks forwards and backwards over a multi-column order: the
+  reverse page is fetched with inverted directions and reversed back, cursor
+  values are JSON-tagged so `bigint` and `Date` keys survive the round trip,
+  and `hasMore`/`hasPrevious` report the edges. `lazyById`/`chunkById` still
   cover more than one page without duplicate ids, and insert-or-ignore,
   update-or-insert and `truncate` round-trip against SQLite.
 - Lifecycle helpers (`fresh`, `touch`, quiet saves, changes/previous, `push`,
@@ -672,17 +795,21 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
   `updateExistingPivot` (asserted on live SQLite, MySQL 8.4.11 and PostgreSQL
   16.15/18.6).
 - `latestOfMany`/`oldestOfMany`/`ofMany` pick the extreme row per parent with a
-  deterministic primary-key tiebreak (asserted live), while
-  `whereHas`/`withCount`/`withSum` compile the correlated `= extreme`
-  predicate; `withDefault`/`withDefaultFor` fill dangling `belongsTo` keys.
+  deterministic primary-key tiebreak (asserted live), and
+  `whereHas`/`withCount`/`withSum` compile the same choice as a correlated
+  `related.<pk> = (select inner.<pk> … order by … limit 1)` predicate, so a tied
+  extreme matches exactly one row in predicates and aggregates as well —
+  asserted live on SQLite, MySQL and PostgreSQL, including a deliberate
+  two-row tie. `withDefault`/`withDefaultFor` fill dangling `belongsTo` keys.
 - `morphedByMany` round-trips in both directions on live engines; a global
   `orm.morphMap({…})` resolves aliases for `morphTo` hydration and bare
   `whereHas("commentable")`, and `static morphAlias` overrides the stored type
   string (asserted in SQL and at runtime).
-- The 35-test compiled-SQL layer pins the new builder surface per dialect:
+- The 41-test compiled-SQL layer pins the new builder surface per dialect:
   integer raw lists (empty → `1 = 0` / `1 = 1`), `whereExists`/`selectSub`,
-  `union`/`unionAll`, `inRandomOrder`, `whereNotBetween`, ofMany extremes,
-  morph alias filters and pivot-manager SQL with validated operators.
+  `union`/`unionAll`, `inRandomOrder`, `whereNotBetween`, ofMany extremes
+  (primary-key subquery form), morph alias filters, pivot-manager SQL with
+  validated operators, and the three `whereJsonOverlaps` compilations.
 - `withSum`/`withAvg`/`withMin`/`withMax` and aliased counts match hand-computed
   totals (`posts.views` sum 112 in the canonical fixture) and stay nullable in
   the type system. The standalone `sum`/`avg`/`min`/`max` builder methods are
@@ -699,7 +826,34 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
   advisory-lock `$1` placeholders, and the same aggregate/relation behavior as
   MySQL.
 - Nested `whereHas`/`orWhereHas`/`whereDoesntHave` compile to correlated
-  `EXISTS`; the type tests reject unknown and morph-to nested paths.
+  `EXISTS`; the type tests reject unknown and morph-to nested paths. A nested
+  step that would shadow its own owner table is aliased
+  (`users__rel_<depth>`), so `whereHas("parent.parent")` on a self-referencing
+  relation and self-referential `withCount`/`withSum` correlate against the
+  enclosing row on all three engines.
+- Pivot writes emit `pivotAttaching`/`pivotAttached`,
+  `pivotDetaching`/`pivotDetached` and `pivotUpdating`/`pivotUpdated` on the
+  parent model class with a typed `{ model, relation, ids, attributes }`
+  payload; a `…ing` gate returning `false` cancels the write, listener order is
+  asserted live, and `withoutModelEvents()` suppresses them. `sync`/`toggle`
+  inherit the events from `attach`/`detach`.
+- Pruning deletes per instance inside its chunk loop, so `deleting`/`deleted`
+  (and `trashed` for soft-deleting models) fire and a `deleting` listener can
+  cancel an individual row.
+- `Migrator.dropAllTables()` returns the dropped table names on all three
+  engines (PostgreSQL `cascade`, MySQL toggling `foreign_key_checks`, names
+  validated against the identifier pattern) and backs `fresh()`.
+- `whereJsonOverlaps` follows MySQL's `JSON_OVERLAPS` on every dialect —
+  asserted with partial array overlap, shared object keys and scalar equality
+  on SQLite, MySQL and PostgreSQL.
+- SQLite `dropUnique`/`dropForeign` now work: a named unique index is dropped
+  directly, and a named constraint triggers SQLite's documented table rebuild
+  (scratch table from the rewritten `sqlite_master` statement, row copy, drop,
+  rename, index replay, `foreign_keys` toggled around the swap).
+- `loadCount`/`loadSum`/`loadAvg`/`loadMin`/`loadMax`/`loadAggregate` return the
+  instance widened with the extras (`this & { postsCount: number }`,
+  `postsSumViews: number | null`, alias-aware), matching the query builder's
+  `with*` typing.
 - Model events fire in documented order; gate listeners cancel writes/deletes;
   observers work; `withoutEvents()` suppresses everything without leaking
   across concurrent scopes.
@@ -721,16 +875,16 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
 - **Live MySQL and PostgreSQL are verified** with the full shared suite against
   MySQL 8.4.11 and PostgreSQL 16.15 and 18.6. The env-gated entry points still
   skip by default when those URLs are absent; the committed GitHub Actions
-  workflow supplies both service containers to reproduce the 250-test run.
+  workflow supplies both service containers to reproduce the 328-test run.
 - The CI workflow executed on a hosted GitHub runner after the push: run
   `39199669711` (`caefc1b`) is green for both the `verify` job and the
   `live-dialects` job against the workflow's own MySQL 8.4 and PostgreSQL 16
   service containers (`mysql:8.4` + `postgres:16`). Run `39199331811`
   (`ab9a6c9`) had failed first at `bun install --frozen-lockfile`; the lockfile
   fix and its local rehearsal are documented in §4.8.
-- The full 250-test suite ran under Bun only; the `node:sqlite` path is covered
-  by the packed BigInt smoke test on Node v24.21.0 (§4.7), not by the full
-  suite.
+- The full suite runs under Bun; the Node runtime is covered by
+  `tests/node/smoke.mjs` against the built **and packed** artifact on SQLite,
+  MySQL and PostgreSQL (§4.7), wired into the `node-runtime` CI job.
 - BigInt `number` default, raw SQL driver-native values and JSON's lack of
   native `bigint` support are documented API boundaries, not hidden failures.
   BigInt mode is opt-in because changing every existing `number` row type would
@@ -766,38 +920,45 @@ casts and dirty tracking — the documented price of the behavioral layer.
 Everything below is documented in `docs/limitations.md`, not hidden:
 
 1. **Lazy-loaded relations**: intentionally unsupported; `with()` only.
-2. **Relation paths deeper than 3 levels**: not typed; load step by step.
+2. **Relation paths deeper than 4 levels**: not typed; load step by step.
 3. **Instance relation/load names are runtime-validated**: the base instance
    cannot see subclass statics. Use `RelationManagerOf<typeof Model, "name">`
    for the typed manager surface; query eager loading remains fully typed.
-   Loaded extras (`postsCount`, `postsSumViews`, …) are runtime properties and
-   need an extended/cast instance type for static access.
+   `loadCount`/`loadSum`/… return the instance widened with the extras
+   (`postsCount`, `postsSumViews`, …), so those are statically available; the
+   *reference* stays a runtime-validated string.
 4. **`morphTo` generic constraints/aggregates/nesting**: unsupported by design
    (no single target table). `whereHasMorph(path, [alias], callback)` is the
    explicit type-scoped filter; bare `with`/`whereHas` work. Invalid generic
    forms are compile errors and runtime `InvalidQueryError`s.
-5. **Self-referential nested `whereHas`**: depth ≥ 2 can be ambiguous because
-   both `EXISTS` blocks alias the same table; use a join or split the query.
+5. **Self-referential nested `whereHas`**: each shadowing step is aliased
+   (`users__rel_<depth>`), so depth ≥ 2 correlates correctly; through-relation
+   joins inside nested paths are not aliased.
 6. **Scope declaration ergonomics**: use `defineScopes`/`defineGlobalScopes` or
    explicit `LocalScope`/`GlobalScope` annotations to avoid circular static
    initialization; literal names are then checked at compile time.
-7. **Cursor pagination is forward-only on one column**: opaque `nextCursor`,
-   `prevCursor: null`, no total; arbitrary multi-column keysets are not
-   provided.
+7. **Cursor pagination is key-set based**: one column (`column`/`direction`) or
+   several (`order`), with `nextCursor`/`prevCursor`/`hasMore`/`hasPrevious`.
+   Cursors are opaque, valid only for the same ordering and filters (a value
+   count mismatch throws `InvalidQueryError`), and there is no total; use
+   `paginate`/`simplePaginate` when a total is required.
 8. **Collection surface is curated**: native array methods not overridden keep
    array semantics (and may return plain arrays via `Symbol.species`). The
    documented Eloquent helpers return `Collection`.
 9. **Cast read values are runtime-narrowed**: `get()` stays typed from the
    schema; `collection`/`stringable` values need `instanceof Collection` /
    `String(...)` when the schema column is `json`.
-10. **JSON overlap is dialect-specific**: MySQL `JSON_OVERLAPS`, PostgreSQL
-    containment in either direction (`@>`/`<@`); SQLite throws
-    `InvalidQueryError`. JSON paths accept `$.a.b`/`a.b` (letters, digits,
+10. **JSON overlap is one semantic everywhere**: MySQL `JSON_OVERLAPS`,
+    PostgreSQL `jsonb_typeof` + `jsonb_array_elements`/`jsonb_each`, SQLite
+    `json_each` — scalars by equality, arrays by shared elements, objects by
+    shared key/value pairs. JSON paths accept `$.a.b`/`a.b` (letters, digits,
     `_`, `$`); array indexes and quoted keys are rejected.
 11. **Touched owners** (`static touches`) update the belongsTo owner's
     `updatedAt` directly after a save; owner model events are not fired and
     touches do not recurse.
-12. **`Stringable` covers common operations**, not Laravel's full string API.
+12. **`Stringable` covers the common surface**, not Laravel's full string API
+    (case conversion, trim/pad/truncate, sliding/`before`/`after`/`between`,
+    search, mutation, `slug`, `length`, `wordCount`).
 13. **`firstOrCreate` race window**: lookup + insert are separate statements; a
     unique index is still required for concurrent safety.
 14. **Accessor names** may not collide with columns or `Model.prototype`;
@@ -825,35 +986,43 @@ Everything below is documented in `docs/limitations.md`, not hidden:
     `wherePivot`/`wherePivotIn`/`orderByPivot` exist on the manager, never
     inside eager-load constraint callbacks or `whereHas`. `orderByPivot` uses a
     correlated `limit 1` scalar subquery per row.
-24. **Custom pivot models (`using`) cover hydration and writes, not events.**
-    Eager-loaded pivots instantiate the class with its casts and
-    `attach`/`updateExistingPivot` apply them; pivot model events are not
-    emitted. Extra columns still require `withPivot`; manager queries return
-    plain related models.
-25. **One-of-many tie semantics**: eager loading returns exactly one row
-    (primary-key tiebreak in the aggregate's direction), while
-    `whereHas`/`withCount`/`withSum` use `= extreme` and may match several tied
-    rows. The extreme subquery always applies the default soft-delete scope,
-    even if the surrounding callback calls `withTrashed()`.
+24. **Custom pivot models (`using`) cover hydration, writes and casts, not
+    pivot-class events.** Eager-loaded pivots instantiate the class with its
+    casts and `attach`/`updateExistingPivot` apply them; pivot **events** fire
+    on the parent model class (`User.onPivot(...)`), matching Eloquent. Extra
+    columns still require `withPivot`; manager queries return plain related
+    models.
+25. **One-of-many selects exactly one row everywhere**: eager loading,
+    `whereHas` and the aggregates all use the primary-key-against-`limit 1`
+    subquery, so tied extremes match once; the subquery always applies the
+    default soft-delete scope, even if the surrounding callback calls
+    `withTrashed()`.
 26. **Morph alias resolution**: `static morphAlias` → `orm.morphMap` → table
     name; maps affect future writes, not existing rows. A `morphTo` manager
     query (`comment.relation("commentable").query()`) throws
     `InvalidQueryError` when the row's type is null or unknown.
 
-27. **SQLite cannot drop constraints**: `dropUnique`/`dropForeign` throw
-    `SchemaError`; MySQL tries `drop foreign key` → `drop index`, PostgreSQL
-    tries `drop constraint` → `drop index`.
-28. **`migrator.fresh()` drops every table** in the connected database before
-    re-running migrations; use a scratch database. `reset()`/`refresh()` only
-    reverse recorded batches.
+27. **SQLite constraint drops rebuild the table**: a named unique index is
+    dropped with `drop index`; a named constraint triggers the documented
+    rebuild (scratch table, row copy, drop, rename, index replay), so keep it
+    in a migration. Auto-named constraints (`sqlite_autoindex_…`) raise
+    `SchemaError`. MySQL tries `drop foreign key` → `drop index`, PostgreSQL
+    `drop constraint` → `drop index`.
+28. **`migrator.fresh()`/`dropAllTables()` drop every table** in the connected
+    database; `fresh()` then re-runs migrations, `dropAllTables()` returns the
+    dropped names. Use a scratch database; `reset()`/`refresh()` only reverse
+    recorded batches.
 29. **Transactions are scoped per connection**: a child `Orm` has its own
     `AsyncLocalStorage` context, so a default-connection transaction does not
     cover queries sent through `orm.connection(name)`.
-30. **`whereAttachedTo` assumes the related primary key is `id`** for
-    has-one/has-many/pivot/through relations; `belongsTo` uses the owner key
-    and `morphTo` uses the morph columns.
-31. **Pruning does not fire model events**; soft-deleting models are trashed.
-    `runSeeders` is sequential and not transactional by itself.
+30. **`whereAttachedTo` uses the related model's real primary key** for
+    has-one/has-many/pivot/through relations (a table without one throws
+    `InvalidQueryError`); `belongsTo` uses the owner key (defaulting to the
+    related primary key) and `morphTo` uses the morph columns plus the target's
+    primary key.
+31. **Pruning fires model events** (per-instance deletes inside each chunk);
+    soft-deleting models are trashed. `runSeeders` is sequential by default and
+    transactional with `{ transaction: true }`.
 32. **Built-in cast names do not refine static return types**: `decimal:<n>`
     and `date:<fmt>` return strings at runtime while `get()` stays
     schema-typed; custom casts with `set` narrow write payloads via
@@ -865,17 +1034,20 @@ No failing tests are hidden; no fake implementations are presented as real.
 
 ## 8. Remaining work
 
-1. Disambiguate self-referential nested `whereHas` (per-depth aliases).
-2. Optional: multi-column/backward cursor pagination.
-3. Optional: broaden `Stringable` / collection helpers further if application
+1. Publish to npm when ready: `license: MIT`, `publishConfig.access: public`,
+   repository/homepage/bugs metadata, `exports` map and `files` list are
+   already set, the tarball is built and installed from disk in CI, and the
+   packed artifact is smoked on Node — but **no registry credentials exist in
+   this environment, so `@barqel/barq-orm` has not been published**. This is
+   the one remaining gap that cannot be closed here.
+2. Optional: run the full `bun:test` suite under Node by shimming `bun:test`
+   onto `node:test` (today the Node coverage is the committed smoke script,
+   which exercises the core surface against SQLite, MySQL and PostgreSQL on
+   the built and packed artifact).
+3. Optional: refine static types for the remaining runtime-narrowed reads
+   (built-in cast names, JSON columns) if application code needs them.
+4. Optional: broaden `Stringable`/collection helpers further if application
    needs exceed the documented surface.
-4. Optional: run the full SQLite suite under Node as well (not just the packed
-   BigInt smoke test).
-5. Publish to npm when ready: `license: MIT`, `publishConfig.access: public`,
-   repository/homepage/bugs metadata and `prepublishOnly` are already set;
-   the package has not actually been published.
-8. Pivot model events remain out of scope; custom pivot hydration/casts are
-   implemented (see §1.13 and §7.24).
 
 ---
 
@@ -888,7 +1060,7 @@ cd barq/packages/orm
 bun run typecheck                       # src, strict
 bun run typecheck:tests                 # src + tests + type-tests + bench + example
 bun run check                           # biome format + lint
-bun test                                # 208 pass / 2 skip / 0 fail (no servers)
+bun test                                # 262 pass / 2 skip / 0 fail (no servers)
 
 # try it
 bun run examples/blog.ts
@@ -896,43 +1068,44 @@ bun run examples/blog.ts
 # benchmark
 bun run bench --json benchmarks/results.json
 
-# build + pack + standalone smoke
+# build + pack + Node smoke (built dist, then the packed tarball)
 bun run build
-bun pm pack --destination /tmp/opencode/orm-smoke-final/pack
-# (install tarball into a clean directory, then:)
-bunx tsc --noEmit --strict --target ES2022 --module ESNext \
-  --moduleResolution Bundler --skipLibCheck packed-typecheck.ts
-bun smoke.mjs                           # Bun 1.4.2
-node smoke.mjs                          # Node v24.21.0 (node:sqlite)
-BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=… bun dialects.mjs   # packed live DBs
-BARQ_ORM_MYSQL_URL=… BARQ_ORM_PG_URL=… node dialects.mjs  # packed live DBs
+bun run smoke
+bun pm pack --destination /tmp/opencode/barq-pack
+mkdir -p /tmp/opencode/barq-smoke && cd /tmp/opencode/barq-smoke
+npm init -y && npm install --no-save /tmp/opencode/barq-pack/*.tgz mysql2 pg
+cp /path/to/barq/packages/orm/tests/node/smoke.mjs .
+BARQ_ORM_PACKED=1 node --no-warnings smoke.mjs
 
 # live dialect gate (local MySQL 8.4.11 + PostgreSQL 18.6 used for this report)
 psql -d postgres -c 'create database barq_orm_test'   # if absent
 BARQ_ORM_MYSQL_URL="mysql://hassan-kerdash:${MYSQL_PASSWORD}@127.0.0.1:3306/barq_orm_test" \
 BARQ_ORM_PG_URL='postgres:///barq_orm_test?host=/var/run/postgresql' \
-  bun test                              # 250 pass / 0 fail
+  bun test                              # 328 pass / 0 fail
 
 # CI equivalent: .github/workflows/orm.yml provisions MySQL 8.4 + PostgreSQL 16
-# service containers and runs the same command with those URLs.
+# service containers and runs `bun test` (job `live-dialects`) plus the Node
+# smoke against dist and the packed tarball (job `node-runtime`).
 ```
 
 ---
 
 ## 10. Honesty statement
 
-- SQLite is fully integration-tested, live, on every `bun test`; the packed
-  artifact was executed standalone on Bun 1.4.2 and Node v24.21.0, and its
-  MySQL/PostgreSQL smoke passed against both live servers on both runtimes.
+- SQLite is fully integration-tested, live, on every `bun test`; the shipped
+  artifact was executed standalone on Node against SQLite, MySQL and
+  PostgreSQL — both the built `dist/` and the packed tarball installed in a
+  clean consumer (`tests/node/smoke.mjs`, §4.7).
 - MySQL 8.4.11 and PostgreSQL 16.15/18.6 were verified with live servers for
-  this report: 21 shared-suite tests each, zero failures. The PostgreSQL 16.15
-  run used the exact `postgres:16` service image from CI; the other used the
-  installed PostgreSQL 18.6. The entry points remain env-gated so the default
-  `bun test` needs no infrastructure.
-- The `250 pass / 0 fail` figure is the actual output of `bun test` with both
-  URLs configured (1157 assertions across 250 tests, 11 files). Without servers
-  the same command is `208 pass / 2 skip / 0 fail` (210 tests, 905 assertions),
-  skipping only those two gated entry points.
+  this report: 33 shared-suite tests each, zero failures, in two independent
+  environments (installed servers and Podman scratch containers). The
+  PostgreSQL 16.15 run used the exact `postgres:16` service image from CI; the
+  other used the installed PostgreSQL 18.6. The entry points remain env-gated
+  so the default `bun test` needs no infrastructure.
+- The `328 pass / 0 fail` figure is the actual output of `bun test` with both
+  URLs configured (1,593 assertions across 328 tests, 12 files). Without
+  servers the same command is `262 pass / 2 skip / 0 fail` (264 tests, 1,163
+  assertions), skipping only those two gated entry points.
 - The CI workflow ran on a hosted GitHub runner (run `39199669711`, `caefc1b`):
   both jobs are green, including the live MySQL/PostgreSQL service-container
   job. The preceding run failed at `bun install --frozen-lockfile`; the

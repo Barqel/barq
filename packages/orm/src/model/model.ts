@@ -28,7 +28,9 @@ import { QueryBuilder } from "../query/builder";
 import type { RowPlan } from "../query/hydrate";
 import { hydrateRow } from "../query/hydrate";
 import type {
+	AggregateExtrasOf,
 	CastedValues,
+	CountExtrasOf,
 	CreateValues,
 	GlobalScopeNamesOf,
 	NumericColumnOf,
@@ -56,6 +58,9 @@ import {
 	type ModelObserver,
 	observeModel,
 	onModelEvent,
+	onPivotEvent,
+	type PivotEventListener,
+	type PivotEventName,
 	withoutModelEvents,
 } from "./events";
 import { Factory } from "./factory";
@@ -1262,8 +1267,10 @@ export class Model<
 	}
 
 	/** Loads relation counts (`postsCount`, or `"posts as pendingCount"`). */
-	async loadCount(...references: string[]): Promise<this> {
-		if (references.length === 0) return this;
+	async loadCount<P extends string>(
+		...references: P[]
+	): Promise<this & CountExtrasOf<P>> {
+		if (references.length === 0) return this as this & CountExtrasOf<P>;
 		const meta = resolveModelMeta(this.constructor as object);
 		const primaryKey = this.#requirePrimaryKey("loadCount");
 		const id = this.#original?.[primaryKey] ?? this.#attributes[primaryKey];
@@ -1286,15 +1293,19 @@ export class Model<
 		).withCount(...references);
 		const row = (await counted.first()) as AnyModel | null;
 		if (row !== null) this.#copyExtras(row);
-		return this;
+		return this as this & CountExtrasOf<P>;
 	}
 
 	/** Loads one relation aggregate supported by `withSum`-style subqueries. */
-	async loadAggregate(
-		kind: "sum" | "avg" | "min" | "max",
-		reference: string,
-		column: string,
-	): Promise<this> {
+	async loadAggregate<
+		K extends "sum" | "avg" | "min" | "max",
+		P extends string,
+		C extends string,
+	>(
+		kind: K,
+		reference: P,
+		column: C,
+	): Promise<this & AggregateExtrasOf<P, C, K>> {
 		const meta = resolveModelMeta(this.constructor as object);
 		const primaryKey = this.#requirePrimaryKey("loadAggregate");
 		const id = this.#original?.[primaryKey] ?? this.#attributes[primaryKey];
@@ -1321,22 +1332,34 @@ export class Model<
 		](reference as never, column as never) as never;
 		const row = (await builder.first()) as AnyModel | null;
 		if (row !== null) this.#copyExtras(row);
-		return this;
+		return this as this & AggregateExtrasOf<P, C, K>;
 	}
 
-	async loadSum(reference: string, column: string): Promise<this> {
+	async loadSum<P extends string, C extends string>(
+		reference: P,
+		column: C,
+	): Promise<this & AggregateExtrasOf<P, C, "sum">> {
 		return this.loadAggregate("sum", reference, column);
 	}
 
-	async loadAvg(reference: string, column: string): Promise<this> {
+	async loadAvg<P extends string, C extends string>(
+		reference: P,
+		column: C,
+	): Promise<this & AggregateExtrasOf<P, C, "avg">> {
 		return this.loadAggregate("avg", reference, column);
 	}
 
-	async loadMin(reference: string, column: string): Promise<this> {
+	async loadMin<P extends string, C extends string>(
+		reference: P,
+		column: C,
+	): Promise<this & AggregateExtrasOf<P, C, "min">> {
 		return this.loadAggregate("min", reference, column);
 	}
 
-	async loadMax(reference: string, column: string): Promise<this> {
+	async loadMax<P extends string, C extends string>(
+		reference: P,
+		column: C,
+	): Promise<this & AggregateExtrasOf<P, C, "max">> {
 		return this.loadAggregate("max", reference, column);
 	}
 
@@ -1478,6 +1501,18 @@ export class Model<
 	/** Registers a full observer object on this model class. */
 	static observe(this: ModelStaticLike, observer: ModelObserver): () => void {
 		return observeModel(this, observer as Record<string, unknown>);
+	}
+
+	/**
+	 * Registers a pivot-event listener on this (parent) model class — the
+	 * events `belongsToMany`/`morphToMany` writes fire (Eloquent parity).
+	 */
+	static onPivot(
+		this: ModelStaticLike,
+		event: PivotEventName,
+		listener: PivotEventListener,
+	): () => void {
+		return onPivotEvent(this, event, listener);
 	}
 
 	/** Runs `callback` with every model event suppressed. */
@@ -1712,9 +1747,10 @@ export class Model<
 	 * const all = await Session.prune(50);
 	 * ```
 	 *
-	 * The `prunable` callback narrows the query; the chunk is loaded, then
-	 * deleted by primary key so soft-deleting models are trashed rather than
-	 * destroyed. Returns the total number of deleted models.
+	 * The `prunable` callback narrows the query; rows are loaded in chunks and
+	 * deleted one instance at a time, so `deleting`/`deleted` listeners fire and
+	 * soft-deleting models are trashed rather than destroyed. Returns the total
+	 * number of removed models.
 	 */
 	static async prune(this: ModelStaticLike, limit = 1000): Promise<number> {
 		if (!Number.isInteger(limit) || limit < 1) {
@@ -1752,22 +1788,15 @@ export class Model<
 			(probe as unknown as { limit(value: number): unknown }).limit(limit);
 			const chunk = (await probe.get()).all() as AnyModel[];
 			if (chunk.length === 0) break;
-			const ids = chunk.map(
-				(model) => internalsOf(model).attributes()[primaryKey],
-			);
-			const deleted = await (
-				queryable.query() as unknown as {
-					whereIn(
-						column: string,
-						values: unknown[],
-					): {
-						delete(): Promise<number>;
-					};
-				}
-			)
-				.whereIn(primaryKey, ids)
-				.delete();
-			total += Number(deleted);
+			// Delete instance by instance so `deleting`/`deleted` (and
+			// `trashed` for soft-deleting models) fire, like Eloquent's
+			// `Prunable` trait. The query stays chunked to bound memory.
+			for (const model of chunk) {
+				const removed = await (
+					model as unknown as { delete(): Promise<boolean> }
+				).delete();
+				if (removed) total += 1;
+			}
 			if (chunk.length < limit) break;
 		}
 		return total;
@@ -2245,6 +2274,12 @@ export interface ModelStatics<S extends Schema, T extends TableName<S>> {
 	observe<M extends ModelClass<S, T>>(
 		this: M,
 		observer: ModelObserver<WithAccessors<M, InstanceType<M>>>,
+	): () => void;
+	/** Pivot-relation events (`belongsToMany`/`morphToMany` writes). */
+	onPivot<M extends ModelClass<S, T>>(
+		this: M,
+		event: PivotEventName,
+		listener: PivotEventListener<WithAccessors<M, InstanceType<M>>>,
 	): () => void;
 	/** Runs the callback with model events suppressed. */
 	withoutEvents<TResult>(

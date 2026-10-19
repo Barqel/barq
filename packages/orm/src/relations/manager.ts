@@ -12,6 +12,7 @@
 
 import { Collection } from "../collection";
 import { InvalidQueryError, ModelNotFoundError } from "../errors";
+import { emitPivotEvent } from "../model/events";
 import type { ModelClass } from "../model/model";
 import type { Orm } from "../orm";
 import { QueryBuilder } from "../query/builder";
@@ -420,6 +421,11 @@ export class RelationManager {
 						`Relation "${this.#ctx.name}": ofMany column "${ofMany.column}" does not exist on "${relatedTable}".`,
 					);
 				}
+				if (relatedMeta.primaryKey === null) {
+					throw new InvalidQueryError(
+						`Relation "${this.#ctx.name}": table "${relatedTable}" needs a primary key for one-of-many selection.`,
+					);
+				}
 				const softColumn = softDeleteColumnOf(related);
 				builder.whereRaw(
 					ofManyPredicateSql(dialect, {
@@ -427,6 +433,7 @@ export class RelationManager {
 						column: ofMany.column,
 						aggregate: ofMany.aggregate,
 						foreignKey,
+						primaryKey: relatedMeta.primaryKey,
 						correlate: { kind: "value", column: foreignKey, value: ownerKey },
 						soft:
 							softColumn === null
@@ -851,6 +858,11 @@ export class RelationManager {
 	): Promise<number> {
 		const list = Array.isArray(ids) ? ids : [ids];
 		if (list.length === 0) return 0;
+		// Eloquent fires pivot events on the parent model; `pivotAttaching`
+		// may cancel the write by returning `false`.
+		if (!(await this.#pivotEvent("pivotAttaching", list, attributes))) {
+			return 0;
+		}
 		const pivot = this.#pivotInfo();
 		const rows = list.map((id) => this.#pivotValues(id, attributes));
 		const pivotClass = this.#descriptor().pivotClass;
@@ -872,12 +884,17 @@ export class RelationManager {
 			.values(prepared.length === 1 ? prepared[0] : prepared)
 			.compile();
 		const result = await this.#ctx.orm.execute(compiled as never);
+		await this.#pivotEvent("pivotAttached", list, attributes);
 		return Number(result.numAffectedRows ?? rows.length);
 	}
 
 	/** Deletes pivot rows; with no ids, deletes every row for this parent. */
 	async detach(ids?: unknown | readonly unknown[]): Promise<number> {
 		const pivot = this.#pivotInfo();
+		const list =
+			ids === undefined ? null : Array.isArray(ids) ? [...ids] : [ids];
+		if (list !== null && list.length === 0) return 0;
+		if (!(await this.#pivotEvent("pivotDetaching", list, {}))) return 0;
 		const executor = this.#ctx.orm.executor() as unknown as {
 			deleteFrom(table: string): {
 				where(column: string, op: string, value: unknown): unknown;
@@ -896,13 +913,32 @@ export class RelationManager {
 				query = query.where(`${morphName}Type`, "=", pivot.morphType) as never;
 			}
 		}
-		if (ids !== undefined) {
-			const list = Array.isArray(ids) ? ids : [ids];
-			if (list.length === 0) return 0;
+		if (list !== null) {
 			query = query.where(pivot.relatedPivotKey, "in", list) as never;
 		}
 		const result = await this.#ctx.orm.execute(query.compile() as never);
+		await this.#pivotEvent("pivotDetached", list, {});
 		return Number(result.numAffectedRows ?? 0);
+	}
+
+	/** Emits a pivot event on the parent model class. */
+	#pivotEvent(
+		event:
+			| "pivotAttaching"
+			| "pivotAttached"
+			| "pivotDetaching"
+			| "pivotDetached"
+			| "pivotUpdating"
+			| "pivotUpdated",
+		ids: readonly unknown[] | null,
+		attributes: Record<string, unknown>,
+	): Promise<boolean> {
+		return emitPivotEvent(this.#ownerClass(), event, {
+			model: this.#ctx.owner,
+			relation: this.#ctx.name,
+			ids,
+			attributes,
+		});
 	}
 
 	/** Current related ids stored in the pivot table. */
@@ -991,6 +1027,9 @@ export class RelationManager {
 		id: unknown,
 		attributes: Record<string, unknown>,
 	): Promise<number> {
+		if (!(await this.#pivotEvent("pivotUpdating", [id], attributes))) {
+			return 0;
+		}
 		const pivot = this.#pivotInfo();
 		const executor = this.#ctx.orm.executor() as unknown as {
 			updateTable(table: string): {
@@ -1037,6 +1076,7 @@ export class RelationManager {
 		}
 		query = query.where(pivot.relatedPivotKey, "=", id) as never;
 		const result = await this.#ctx.orm.execute(query.compile() as never);
+		await this.#pivotEvent("pivotUpdated", [id], attributes);
 		return Number(result.numAffectedRows ?? 0);
 	}
 

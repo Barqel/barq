@@ -15,7 +15,6 @@ import {
 	hasMany,
 	hasManyThrough,
 	hasOne,
-	InvalidQueryError,
 	latestOfMany,
 	type MigrationContext,
 	Migrator,
@@ -25,7 +24,6 @@ import {
 	morphToMany,
 	Orm,
 	runSeeders,
-	SchemaError,
 	UniqueConstraintError,
 	withDefault,
 } from "../../src/index";
@@ -44,6 +42,7 @@ export function runDialectSuite(
 				age: { type: "integer", nullable: true },
 				active: { type: "boolean", default: true },
 				settings: { type: "json", nullable: true },
+				scores: { type: "json", nullable: true },
 				balance: { type: "decimal", nullable: true },
 				countryId: { type: "integer", nullable: true },
 				deletedAt: { type: "datetime", nullable: true },
@@ -325,6 +324,7 @@ export function runDialectSuite(
 				t.integer("age").nullable();
 				t.boolean("active").default(true);
 				t.json("settings").nullable();
+				t.json("scores").nullable();
 				t.decimal("balance", 12, 2).nullable();
 				t.integer("countryId").nullable();
 				t.datetime("deletedAt").nullable();
@@ -1235,55 +1235,33 @@ export function runDialectSuite(
 				});
 				expect(await columnNames("priorityWidgets")).not.toContain("renamed");
 
-				if (orm.dialectKind === "sqlite") {
-					// SQLite cannot drop inline/unique constraints.
-					await expect(
-						ddl.alter("priorityWidgets", (t) => {
-							t.dropUnique("p2_code_unique");
-						}),
-					).rejects.toThrow(SchemaError);
-					await expect(
-						orm.table("priorityWidgets").insert({ code: "abc-123" }),
-					).rejects.toThrow(UniqueConstraintError);
-				} else {
-					// dropUnique: the named unique index disappears and
-					// duplicate values become acceptable.
-					await ddl.alter("priorityWidgets", (t) => {
-						t.dropUnique("p2_code_unique");
-					});
-					const duplicate = await orm
-						.table("priorityWidgets")
-						.insert({ code: "abc-123", flags: 2 });
-					expect(typeof duplicate.id).toBe("number");
-				}
+				// dropUnique works on every dialect; on SQLite the named
+				// unique index is dropped directly.
+				await ddl.alter("priorityWidgets", (t) => {
+					t.dropUnique("p2_code_unique");
+				});
+				const duplicate = await orm
+					.table("priorityWidgets")
+					.insert({ code: "abc-123", flags: 2 });
+				expect(typeof duplicate.id).toBe("number");
 
 				const names = await foreignKeyNames("priorityWidgets", "users");
 				expect(names.length).toBe(1);
-				if (orm.dialectKind === "sqlite") {
-					await expect(
-						ddl.alter("priorityWidgets", (t) => {
-							// SQLite cannot drop constraints; a syntactically
-							// valid name is enough to reach that guard.
-							t.dropForeign("priorityWidgets_userId_foreign");
-						}),
-					).rejects.toThrow(SchemaError);
-				} else {
-					// dropForeign: the FK constraint disappears and orphan
-					// values become acceptable.
-					await expect(
-						orm
-							.table("priorityWidgets")
-							.insert({ code: "fk-before", userId: 987654321 }),
-					).rejects.toThrow();
-					await ddl.alter("priorityWidgets", (t) => {
-						t.dropForeign(names[0] as string);
-					});
-					const orphan = await orm
+				// dropForeign removes the constraint, so orphan values become
+				// acceptable. SQLite rebuilds the table to do it.
+				await expect(
+					orm
 						.table("priorityWidgets")
-						.insert({ code: "fk-after", userId: 987654321 });
-					expect(typeof orphan.id).toBe("number");
-					expect(await foreignKeyNames("priorityWidgets", "users")).toEqual([]);
-				}
+						.insert({ code: "fk-before", userId: 987654321 }),
+				).rejects.toThrow();
+				await ddl.alter("priorityWidgets", (t) => {
+					t.dropForeign("priorityWidgets_userId_foreign");
+				});
+				const orphan = await orm
+					.table("priorityWidgets")
+					.insert({ code: "fk-after", userId: 987654321 });
+				expect(typeof orphan.id).toBe("number");
+				expect(await foreignKeyNames("priorityWidgets", "users")).toEqual([]);
 			});
 
 			test("json extras: paths, keys, length and overlaps", async () => {
@@ -1295,6 +1273,7 @@ export function runDialectSuite(
 							tags: ["vip", "beta"],
 							profile: { tier: "gold" },
 						}),
+						scores: JSON.stringify(["vip", "beta"]),
 					},
 					{
 						name: "p2-json-b",
@@ -1348,20 +1327,41 @@ export function runDialectSuite(
 				expect(byLength.count()).toBe(1);
 				expect(byLength.first()?.name).toBe("p2-json-a");
 
-				if (orm.dialectKind === "sqlite") {
-					// SQLite has no JSON overlap operator.
-					expect(() =>
-						orm.table("users").whereJsonOverlaps("settings", { vip: true }),
-					).toThrow(InvalidQueryError);
-				} else {
-					const overlaps = await orm
-						.table("users")
-						.whereJsonOverlaps("settings", { vip: true })
-						.where("email", "like", "p2-json-%")
-						.get();
-					expect(overlaps.count()).toBe(1);
-					expect(overlaps.first()?.name).toBe("p2-json-c");
-				}
+				// `whereJsonOverlaps` follows MySQL's `JSON_OVERLAPS`
+				// semantics on every dialect: shared key/value pair here.
+				const overlaps = await orm
+					.table("users")
+					.whereJsonOverlaps("settings", { vip: true })
+					.where("email", "like", "p2-json-%")
+					.get();
+				expect(overlaps.count()).toBe(1);
+				expect(overlaps.first()?.name).toBe("p2-json-c");
+
+				// Shared pair by exact value (arrays compare structurally).
+				const sharedPair = await orm
+					.table("users")
+					.whereJsonOverlaps("settings", { tags: ["vip", "beta"] })
+					.where("email", "like", "p2-json-%")
+					.get();
+				expect(sharedPair.count()).toBe(1);
+				expect(sharedPair.first()?.name).toBe("p2-json-a");
+
+				// Elements of an array column overlap element-wise, so a
+				// partial (non-contained) overlap still matches.
+				const partial = await orm
+					.table("users")
+					.whereJsonOverlaps("scores", ["vip", "missing"])
+					.where("email", "like", "p2-json-%")
+					.get();
+				expect(partial.count()).toBe(1);
+				expect(partial.first()?.name).toBe("p2-json-a");
+
+				const noOverlap = await orm
+					.table("users")
+					.whereJsonOverlaps("settings", { vip: false })
+					.where("email", "like", "p2-json-%")
+					.get();
+				expect(noOverlap.count()).toBe(0);
 			});
 
 			test("whereMorphedTo / whereAttachedTo follow every relation kind", async () => {
@@ -1563,6 +1563,210 @@ export function runDialectSuite(
 				expect(await ddl.hasTable("p2_things")).toBe(true);
 			});
 
+			test("one-of-many predicates match exactly one tied row", async () => {
+				const owner = await User.create({
+					name: "p3-ties",
+					email: "p3-ties@example.com",
+				});
+				const ownerId = owner.get("id");
+				await Post.create({
+					userId: ownerId,
+					title: "p3-tie-a",
+					views: 42,
+				});
+				await Post.create({
+					userId: ownerId,
+					title: "p3-tie-b",
+					views: 42,
+				});
+
+				expect(
+					(
+						await User.query().where("id", ownerId).whereHas("latestPost").get()
+					).count(),
+				).toBe(1);
+				const counted = await User.query()
+					.where("id", ownerId)
+					.withCount("latestPost")
+					.withSum("latestPost", "views")
+					.get();
+				const row = counted.first() as unknown as {
+					latestPostCount: number;
+					latestPostSumViews: number;
+				};
+				expect(row.latestPostCount).toBe(1);
+				expect(Number(row.latestPostSumViews)).toBe(42);
+				const manager = await owner.relation("latestPost").query().get();
+				expect(manager.count()).toBe(1);
+				expect(manager.first()?.get("title")).toBe("p3-tie-b");
+			});
+
+			test("pivot events fire on the parent model and gates cancel", async () => {
+				const owner = await User.create({
+					name: "p3-pivot-events",
+					email: "p3-pivot-events@example.com",
+				});
+				const role = await orm.table("roles").insert({ name: "p3-role" });
+				const roleId = (role as { id: unknown }).id;
+
+				const events: string[] = [];
+				const offs = [
+					User.onPivot("pivotAttaching", (payload) => {
+						events.push(
+							`attaching:${payload.relation}:${(payload.ids ?? []).length}`,
+						);
+					}),
+					User.onPivot("pivotAttached", (payload) => {
+						events.push(`attached:${payload.relation}`);
+					}),
+					User.onPivot("pivotUpdating", () => {
+						events.push("updating");
+					}),
+					User.onPivot("pivotUpdated", () => {
+						events.push("updated");
+					}),
+					User.onPivot("pivotDetaching", () => {
+						events.push("detaching");
+					}),
+					User.onPivot("pivotDetached", () => {
+						events.push("detached");
+					}),
+				];
+				try {
+					expect(
+						await owner.relation("roles").attach(roleId, { note: "first" }),
+					).toBe(1);
+					await owner
+						.relation("roles")
+						.updateExistingPivot(roleId, { note: "second" });
+					expect(await owner.relation("roles").detach(roleId)).toBe(1);
+				} finally {
+					for (const off of offs) off();
+				}
+				expect(events).toEqual([
+					"attaching:roles:1",
+					"attached:roles",
+					"updating",
+					"updated",
+					"detaching",
+					"detached",
+				]);
+
+				// Returning `false` from a gate event cancels the write.
+				const gate = User.onPivot("pivotAttaching", () => false);
+				try {
+					expect(await owner.relation("roles").attach(roleId)).toBe(0);
+				} finally {
+					gate();
+				}
+				expect(await owner.relation("roles").query().count()).toBe(0);
+			});
+
+			test("cursor pagination walks forwards and backwards over many columns", async () => {
+				await orm.table("priorityWidgets").insertMany(
+					[1, 2, 3, 4, 5].map((index) => ({
+						code: `p3-cursor-0${index}`,
+						flags: index,
+						rank: index,
+						size: index * 10,
+					})),
+				);
+				const base = () =>
+					orm.table("priorityWidgets").where("code", "like", "p3-cursor-%");
+				const order = [
+					{ column: "rank" as const },
+					{ column: "code" as const },
+				];
+
+				const first = await base().cursorPaginate(2, { order });
+				expect(first.data.map((row) => String(row.code)).all()).toEqual([
+					"p3-cursor-01",
+					"p3-cursor-02",
+				]);
+				expect(first.hasMore).toBe(true);
+				expect(first.hasPrevious).toBe(false);
+				expect(first.prevCursor).toBeNull();
+
+				const second = await base().cursorPaginate(2, {
+					order,
+					cursor: first.nextCursor,
+				});
+				expect(second.data.map((row) => String(row.code)).all()).toEqual([
+					"p3-cursor-03",
+					"p3-cursor-04",
+				]);
+				expect(second.hasPrevious).toBe(true);
+
+				const third = await base().cursorPaginate(2, {
+					order,
+					cursor: second.nextCursor,
+				});
+				expect(third.data.map((row) => String(row.code)).all()).toEqual([
+					"p3-cursor-05",
+				]);
+				expect(third.hasMore).toBe(false);
+				expect(third.nextCursor).toBeNull();
+
+				// `prevCursor` walks back to the page we came from.
+				const back = await base().cursorPaginate(2, {
+					order,
+					cursor: second.prevCursor,
+				});
+				expect(back.data.map((row) => String(row.code)).all()).toEqual([
+					"p3-cursor-01",
+					"p3-cursor-02",
+				]);
+				expect(back.hasPrevious).toBe(false);
+
+				// Single descending column keeps working.
+				const desc = await base().cursorPaginate(2, {
+					column: "rank",
+					direction: "desc",
+				});
+				expect(desc.data.map((row) => Number(row.rank)).all()).toEqual([5, 4]);
+				const descNext = await base().cursorPaginate(2, {
+					column: "rank",
+					direction: "desc",
+					cursor: desc.nextCursor,
+				});
+				expect(descNext.data.map((row) => Number(row.rank)).all()).toEqual([
+					3, 2,
+				]);
+				const descBack = await base().cursorPaginate(2, {
+					column: "rank",
+					direction: "desc",
+					cursor: descNext.prevCursor,
+				});
+				expect(descBack.data.map((row) => Number(row.rank)).all()).toEqual([
+					5, 4,
+				]);
+			});
+
+			test("transactional seeders roll back as a unit", async () => {
+				const email = "p3-seed@example.com";
+				await expect(
+					runSeeders(
+						orm,
+						[
+							async () => {
+								await User.create({ name: "p3-seed", email });
+							},
+							async () => {
+								throw new Error("p3 seeder failed");
+							},
+						],
+						{ transaction: true },
+					),
+				).rejects.toThrow("p3 seeder failed");
+				expect(await orm.table("users").where("email", email).count()).toBe(0);
+				await runSeeders(orm, [
+					async () => {
+						await User.create({ name: "p3-seed", email });
+					},
+				]);
+				expect(await orm.table("users").where("email", email).count()).toBe(1);
+			});
+
 			// Destructive: drops every table in the database, so it runs last.
 			test("migrator.fresh drops every table and re-runs migrations", async () => {
 				const migrator = new Migrator(orm, {
@@ -1586,6 +1790,8 @@ export function runDialectSuite(
 						},
 					],
 				});
+				const dropped = await migrator.dropAllTables();
+				expect(dropped).toContain("users");
 				const fresh = await migrator.fresh();
 				expect(fresh.applied).toEqual(["0001_create_p2_things"]);
 				expect(await orm.schemaBuilder().hasTable("p2_things")).toBe(true);

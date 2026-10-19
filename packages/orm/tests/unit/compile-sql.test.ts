@@ -598,9 +598,9 @@ describe("Priority-1 parity SQL generation", () => {
 	test("one-of-many relations compile a correlated extreme subquery", () => {
 		const expected = {
 			sqlite:
-				'select * from "users" where exists (select 1 as "one" from "posts" where "posts"."userId" = "users"."id" and "posts"."views" = (select max("__barq_of_many"."views") from "posts" as "__barq_of_many" where "__barq_of_many"."userId" = "users"."id"))',
+				'select * from "users" where exists (select 1 as "one" from "posts" where "posts"."userId" = "users"."id" and "posts"."id" = (select "__barq_of_many"."id" from "posts" as "__barq_of_many" where "__barq_of_many"."userId" = "users"."id" order by "__barq_of_many"."views" desc, "__barq_of_many"."id" desc limit 1))',
 			mysql:
-				"select * from `users` where exists (select 1 as `one` from `posts` where `posts`.`userId` = `users`.`id` and `posts`.`views` = (select max(`__barq_of_many`.`views`) from `posts` as `__barq_of_many` where `__barq_of_many`.`userId` = `users`.`id`))",
+				"select * from `users` where exists (select 1 as `one` from `posts` where `posts`.`userId` = `users`.`id` and `posts`.`id` = (select `__barq_of_many`.`id` from `posts` as `__barq_of_many` where `__barq_of_many`.`userId` = `users`.`id` order by `__barq_of_many`.`views` desc, `__barq_of_many`.`id` desc limit 1))",
 		} as const;
 		for (const kind of ["sqlite", "mysql"] as const) {
 			const { UserModel } = setup(kind);
@@ -742,26 +742,30 @@ describe("priority-2 SQL generation", () => {
 		expect(postgres.parameters).toEqual(["{a,b}"]);
 	});
 
-	test("whereJsonOverlaps per dialect (SQLite throws)", () => {
+	test("whereJsonOverlaps per dialect", () => {
 		const mysql = compileOnlyOrm(schema, "mysql")
 			.table("users")
 			.whereJsonOverlaps("name", ["a"])
 			.toSQL();
 		expect(normalize(mysql.sql)).toContain("json_overlaps(`name`, ?)");
 
-		const postgres = compileOnlyOrm(schema, "postgres")
-			.table("users")
-			.whereJsonOverlaps("name", ["a"])
-			.toSQL();
-		expect(normalize(postgres.sql)).toContain(
-			'(("name")::jsonb @> $1::jsonb or ("name")::jsonb <@ $2::jsonb)',
+		const postgres = normalize(
+			compileOnlyOrm(schema, "postgres")
+				.table("users")
+				.whereJsonOverlaps("name", ["a"])
+				.toSQL().sql,
 		);
+		expect(postgres).toContain("jsonb_typeof((\"name\")::jsonb) = 'array'");
+		expect(postgres).toContain("jsonb_array_elements");
 
-		expect(() =>
+		const sqlite = normalize(
 			compileOnlyOrm(schema, "sqlite")
 				.table("users")
-				.whereJsonOverlaps("name", ["a"]),
-		).toThrow(InvalidQueryError);
+				.whereJsonOverlaps("name", ["a"])
+				.toSQL().sql,
+		);
+		expect(sqlite).toContain('json_each("name")');
+		expect(sqlite).toContain("json_type(\"name\") = 'array'");
 	});
 
 	test("whereJsonLength with a path per dialect", () => {

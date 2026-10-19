@@ -330,12 +330,174 @@ describe("blueprint + migrator extras", () => {
 		await builder.alter("widgets", (t) => {
 			t.dropIndex("widgets_rank_idx");
 		});
-		// SQLite cannot drop inline constraints.
+		// An unnamed inline `unique` has no droppable name — SQLite's
+		// auto-index is not addressable, so the error stays explicit.
 		await expect(
 			builder.alter("widgets", (t) => {
 				t.dropUnique("widgets_code_unique");
 			}),
 		).rejects.toThrow(SchemaError);
+	});
+
+	test("SQLite drops named unique indexes and rebuilds for constraints", async () => {
+		const rebuildSchema = defineSchema({
+			parents: {
+				id: { type: "integer", primaryKey: true, autoIncrement: true },
+				label: "string",
+			},
+			children: {
+				id: { type: "integer", primaryKey: true, autoIncrement: true },
+				code: { type: "string", nullable: true },
+				parentId: { type: "integer", nullable: true },
+			},
+		});
+		const ddl = new Orm({ schema: rebuildSchema, dialect: sqlite(":memory:") });
+		const builder = ddl.schemaBuilder();
+		await builder.create("parents", (t) => {
+			t.id();
+			t.string("label", 40);
+		});
+		await builder.create("children", (t) => {
+			t.id();
+			t.string("code", 20);
+			t.index("code", "children_code_idx");
+			t.unique("code", "children_code_unique");
+			t.foreignId("parentId").constrained("parents");
+		});
+		await ddl.table("parents").insert({ label: "first" });
+		const parent = await ddl.table("parents").insert({ label: "second" });
+		await ddl.table("children").insert({
+			code: "a",
+			parentId: parent.id,
+		});
+		await expect(
+			ddl.table("children").insert({ code: "a", parentId: parent.id }),
+		).rejects.toThrow();
+		await expect(
+			ddl.table("children").insert({ code: "b", parentId: 999_999 }),
+		).rejects.toThrow();
+
+		// A named unique index drops with `drop index`.
+		await builder.alter("children", (t) => {
+			t.dropUnique("children_code_unique");
+		});
+		await ddl.table("children").insert({ code: "a", parentId: parent.id });
+
+		// A named foreign key drops through the table rebuild, which copies
+		// the rows and re-creates the remaining indexes.
+		await builder.alter("children", (t) => {
+			t.dropForeign("children_parentId_foreign");
+		});
+		const orphan = await ddl
+			.table("children")
+			.insert({ code: "c", parentId: 999_999 });
+		expect(typeof orphan.id).toBe("number");
+		const rows = await ddl.table("children").orderBy("id").get();
+		expect(rows.count()).toBe(3);
+		const indexes = await ddl.raw("pragma index_list('children')");
+		expect(indexes.rows.map((row) => String(row.name))).toContain(
+			"children_code_idx",
+		);
+		const foreignKeys = await ddl.raw("pragma foreign_key_list('children')");
+		expect(foreignKeys.rows).toHaveLength(0);
+	});
+
+	test("self-referential relations alias nested EXISTS and aggregates", async () => {
+		const treeSchema = defineSchema({
+			nodes: {
+				id: { type: "integer", primaryKey: true, autoIncrement: true },
+				parentId: { type: "integer", nullable: true },
+				name: "string",
+			},
+		});
+		const treeOrm = new Orm({
+			schema: treeSchema,
+			dialect: sqlite(":memory:"),
+		});
+		await treeOrm.schemaBuilder().create("nodes", (t) => {
+			t.id();
+			t.integer("parentId").nullable();
+			t.string("name");
+		});
+		class Node extends treeOrm.model("nodes") {
+			static relations = {
+				parent: belongsTo(() => Node, "parentId"),
+				children: hasMany(() => Node, "parentId"),
+			};
+		}
+		const root = await Node.create({ name: "root" });
+		const rootId = root.get("id") as number;
+		const mid = await Node.create({ name: "mid", parentId: rootId });
+		const other = await Node.create({ name: "other", parentId: rootId });
+		await Node.create({ name: "leaf", parentId: mid.get("id") as number });
+
+		const names = async (query: {
+			get(): Promise<{ all(): Array<{ get(c: string): unknown }> }>;
+		}) =>
+			(await query.get())
+				.all()
+				.map((row) => row.get("name"))
+				.sort();
+
+		// Depth 1: every node with a parent.
+		expect(await names(Node.query().whereHas("parent"))).toEqual([
+			"leaf",
+			"mid",
+			"other",
+		]);
+		// Depth 2: only `leaf` has a grandparent, and the inner EXISTS must
+		// reference the *outer* `nodes`, not its own copy.
+		expect(await names(Node.query().whereHas("parent.parent"))).toEqual([
+			"leaf",
+		]);
+		// Reverse direction, same nesting problem.
+		expect(await names(Node.query().whereHas("children.children"))).toEqual([
+			"root",
+		]);
+		expect(await names(Node.query().whereDoesntHave("parent.parent"))).toEqual([
+			"mid",
+			"other",
+			"root",
+		]);
+
+		// The compiled SQL aliases the inner copy so it cannot shadow.
+		const sql = Node.query().whereHas("parent.parent").toSQL().sql;
+		expect(sql).toContain("nodes__rel_0");
+
+		// A self-referential aggregate correlates through the same alias.
+		const counted = await Node.query()
+			.orderBy("id")
+			.withCount("children")
+			.get();
+		expect(
+			counted.all().map((node) => {
+				const row = node as unknown as {
+					get(c: string): unknown;
+					childrenCount: number;
+				};
+				return [row.get("name"), row.childrenCount];
+			}),
+		).toEqual([
+			["root", 2],
+			["mid", 1],
+			["other", 0],
+			["leaf", 0],
+		]);
+		expect(Node.query().withCount("children").toSQL().sql).toContain(
+			'from "nodes" as "nodes__rel_0"',
+		);
+
+		// Eager loading walks the chain without touching the ambiguity.
+		const [leaf] = await Node.query()
+			.where("name", "leaf")
+			.with("parent.parent")
+			.get();
+		const loaded = leaf as unknown as {
+			parent: { get(c: string): unknown; parent: { get(c: string): unknown } };
+		};
+		expect(loaded.parent.get("name")).toBe("mid");
+		expect(loaded.parent.parent.get("name")).toBe("root");
+		void other;
 	});
 
 	test("migrator reset/refresh/fresh/pretend", async () => {
@@ -499,6 +661,32 @@ describe("factories and seeders", () => {
 		]);
 		expect(order).toEqual(["first", "second"]);
 	});
+
+	test("runSeeders with transaction rolls the whole list back", async () => {
+		const email = "seed-rolled-back@example.com";
+		await expect(
+			runSeeders(
+				orm,
+				[
+					async () => {
+						await User.create({ name: "seeded", email });
+					},
+					async () => {
+						throw new Error("seeder failed");
+					},
+				],
+				{ transaction: true },
+			),
+		).rejects.toThrow("seeder failed");
+		expect(await User.query().where("email", email).count()).toBe(0);
+		// Without the option the first seeder's row survives.
+		await runSeeders(orm, [
+			async () => {
+				await User.create({ name: "seeded", email });
+			},
+		]);
+		expect(await User.query().where("email", email).count()).toBe(1);
+	});
 });
 
 describe("multi-connection routing", () => {
@@ -620,10 +808,19 @@ describe("JSON extras", () => {
 		expect(rows.count()).toBe(1);
 	});
 
-	test("whereJsonOverlaps is unsupported on SQLite", () => {
-		expect(() =>
-			orm.table("users").whereJsonOverlaps("settings", { tags: ["vip"] }),
-		).toThrow(InvalidQueryError);
+	test("whereJsonOverlaps shares elements or key/value pairs", async () => {
+		const byPair = await orm
+			.table("users")
+			.whereJsonOverlaps("settings", { tags: ["vip", "beta"] })
+			.where("name", "=", "json-a")
+			.get();
+		expect(byPair.count()).toBe(1);
+		const noOverlap = await orm
+			.table("users")
+			.whereJsonOverlaps("settings", { tags: ["nope"] })
+			.where("name", "=", "json-a")
+			.get();
+		expect(noOverlap.count()).toBe(0);
 	});
 
 	test("invalid JSON paths throw", () => {

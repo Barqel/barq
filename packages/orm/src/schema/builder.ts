@@ -19,6 +19,7 @@ import type { DialectKind } from "../errors";
 import { InvalidIdentifierError, SchemaError } from "../errors";
 import type { Orm } from "../orm";
 import type { ColumnType, Schema } from "./columns";
+import { planSqliteRebuild } from "./sqlite-rebuild";
 
 /** Internal compile boundary — Kysely builder generics are erased here. */
 type AnyStatement = any;
@@ -637,9 +638,57 @@ export class SchemaBuilder<S extends Schema> {
 			}
 			return;
 		}
-		throw new SchemaError(
-			`dropUnique("${name}") / dropForeign("${name}") on SQLite: inline constraints cannot be dropped. Drop and recreate the table instead.`,
+		await this.#dropConstraintSqlite(table, name);
+	}
+
+	/**
+	 * SQLite: a named unique index is dropped directly; an inline/table-level
+	 * constraint (including every foreign key) needs the documented table
+	 * rebuild — new table, copy, drop, rename, recreate indexes.
+	 */
+	async #dropConstraintSqlite(table: string, name: string): Promise<void> {
+		const orm = this.#orm;
+		const indexes = await orm.raw(`pragma index_list('${table}')`);
+		const isIndex = indexes.rows.some((row) => String(row.name) === name);
+		if (isIndex) {
+			await orm.raw(`drop index if exists "${name}"`);
+			return;
+		}
+		const master = await orm.raw(
+			`select sql from sqlite_master where type = 'table' and name = '${table}'`,
 		);
+		const createSql =
+			master.rows.length > 0 ? String(master.rows[0]!.sql ?? "") : "";
+		if (createSql === "") {
+			throw new SchemaError(
+				`dropUnique("${name}") / dropForeign("${name}") on SQLite: table "${table}" not found.`,
+			);
+		}
+		const info = await orm.raw(`pragma table_info('${table}')`);
+		const columns = info.rows.map((row) => String(row.name));
+		const indexRows = await orm.raw(
+			`select name, sql from sqlite_master where type = 'index' and tbl_name = '${table}' and sql is not null`,
+		);
+		const plan = planSqliteRebuild({
+			table,
+			createSql,
+			constraint: name,
+			columns,
+			indexes: indexRows.rows.map((row) => ({
+				name: String(row.name),
+				sql: String(row.sql),
+			})),
+		});
+		// `pragma foreign_keys` is a no-op inside a transaction: disable it
+		// first so dropping the old table cannot trip another table's FK.
+		await orm.raw("pragma foreign_keys = off");
+		try {
+			for (const statement of plan.statements) {
+				await orm.raw(statement);
+			}
+		} finally {
+			await orm.raw("pragma foreign_keys = on");
+		}
 	}
 
 	#applyColumn(col: AnyStatement, column: ColumnSpec): AnyStatement {

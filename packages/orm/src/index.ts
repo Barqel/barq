@@ -54,6 +54,9 @@ export type {
 	ModelEventListener,
 	ModelEventName,
 	ModelObserver,
+	PivotEventListener,
+	PivotEventName,
+	PivotEventPayload,
 } from "./model/events";
 export type {
 	FactoryDefinition,
@@ -61,6 +64,7 @@ export type {
 	FactoryValue,
 	Seeder,
 	SeederLike,
+	SeederOptions,
 } from "./model/factory";
 export { defineSeeder, Factory, runSeeders } from "./model/factory";
 export type {

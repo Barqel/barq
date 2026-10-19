@@ -152,16 +152,33 @@ export function defineSeeder<S extends Schema>(
 	return seeder;
 }
 
+/** Options for {@link runSeeders}. */
+export interface SeederOptions {
+	/**
+	 * Runs the whole seeder list inside one transaction (Eloquent's
+	 * `--isolated` behaviour). MySQL DDL still auto-commits.
+	 */
+	readonly transaction?: boolean;
+}
+
 /** Runs seeders in order (`db:seed`). */
 export async function runSeeders<S extends Schema>(
 	orm: Orm<S>,
 	seeders: ReadonlyArray<SeederLike<S>>,
+	options: SeederOptions = {},
 ): Promise<void> {
-	for (const seeder of seeders) {
-		if (typeof seeder === "function") {
-			await seeder(orm);
-		} else {
-			await seeder.run(orm);
+	const run = async (): Promise<void> => {
+		for (const seeder of seeders) {
+			if (typeof seeder === "function") {
+				await seeder(orm);
+			} else {
+				await seeder.run(orm);
+			}
 		}
+	};
+	if (options.transaction === true) {
+		await orm.transaction(run);
+		return;
 	}
+	await run();
 }

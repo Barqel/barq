@@ -65,20 +65,22 @@ SQLite never load them.
 
 | Dialect | SQL generation | Live integration tests |
 | --- | --- | --- |
-| SQLite | tested | ✅ live suite on every `bun test` (Bun driver); Node driver covered by the packed smoke test |
-| MySQL | tested | ✅ 18-test live suite against MySQL 8.4.11 |
-| PostgreSQL | tested | ✅ 18-test live suite against PostgreSQL 16.15 and 18.6 |
+| SQLite | tested | ✅ full live suite on every `bun test` (Bun driver); the Node `node:sqlite` path is covered by the built + packed smoke test |
+| MySQL | tested | ✅ 33-test live suite against MySQL 8.4.11 |
+| PostgreSQL | tested | ✅ 33-test live suite against PostgreSQL 16.15 and 18.6 |
 
 MySQL and PostgreSQL are verified against live servers. The shared conformance
 suite stays env-gated so the default `bun test` never needs infrastructure.
 The [ORM CI workflow](https://github.com/Barqel/barq/blob/main/.github/workflows/orm.yml)
 provisions both engines as service containers and runs the full suite
 (including every live test) on each push and pull request that touches this
-package:
+package, plus a Node job that smokes the built and packed artifact against all
+three engines:
 
 ```sh
 BARQ_ORM_MYSQL_URL=mysql://root:secret@127.0.0.1:3306/barq_test bun test tests/integration/mysql.test.ts
 BARQ_ORM_PG_URL=postgres://postgres:secret@127.0.0.1:5432/barq_test bun test tests/integration/postgres.test.ts
+node tests/node/smoke.mjs   # Node runtime, built dist (or `bun run smoke`; add the URLs for live engines)
 ```
 
 ## Quickstart
@@ -377,6 +379,18 @@ Lifecycle events: `retrieved`, `creating`/`created`, `saving`/`saved`,
 cancels the operation. Listeners are per model class and process-local;
 `withoutEvents()` uses `AsyncLocalStorage`, so concurrent scopes do not leak.
 
+Pivot writes on the parent model fire `pivotAttaching`/`pivotAttached`,
+`pivotDetaching`/`pivotDetached` and `pivotUpdating`/`pivotUpdated`, carrying a
+typed `{ model, relation, ids, attributes }` payload:
+
+```ts
+const offPivot = User.onPivot("pivotAttaching", ({ relation, ids }) => {
+	if (relation === "roles" && ids?.length === 0) return false; // cancel
+});
+await user.relation("roles").attach(roleId, { note: "primary" });
+offPivot();
+```
+
 
 ### Scopes and lifecycle helpers
 
@@ -442,7 +456,9 @@ Supported relations: `hasMany`, `hasOne`, `belongsTo`, `belongsToMany`,
 model's columns and a typed union result for `morphTo`. `latestOfMany` /
 `oldestOfMany` / `ofMany` build a one-of-many `hasOne` that selects the extreme
 row per parent; `withDefault` / `withDefaultFor` attach a placeholder owner to
-dangling `belongsTo` keys.
+dangling `belongsTo` keys. One-of-many selects exactly one row everywhere —
+eager loading, `whereHas` and the aggregates compare the related primary key
+against an ordered `limit 1` subquery, so tied extremes never match twice.
 
 ```ts
 class User extends orm.model("users") {
@@ -562,9 +578,9 @@ Because an instance cannot see its subclass's static relation map, the
 instance-level `relation("…")` and `load("…")` names are validated at runtime.
 Cast a manager to `RelationManagerOf<typeof Model, "name">` to recover the
 compile-time surface; eager loading through `Model.query().with("…")` is fully
-typed. `loadCount`/`loadSum`/… attach extras such as `postsCount` and
-`postsSumViews` at runtime; extend/cast the instance type when you need static
-property access.
+typed. `loadCount`/`loadSum`/… return the instance widened with the extras
+(`postsCount`, `postsSumViews`), matching `withCount`/`withSum` on the query
+builder.
 
 `morphTo` cannot be constrained generically, nested or aggregated (there is no
 single target table); bare `with("commentable")` and `whereHas("commentable")`
@@ -604,19 +620,29 @@ Writes include `insert`, `insertMany`, `insertOrIgnore`, `update`,
 atomic `increment(column, by, extra?)` / `decrement(column, by, extra?)`.
 
 Pagination returns collections: `paginate` (with total), `simplePaginate` (no
-count), and `cursorPaginate` (keyset on one column; pass `nextCursor` back as
-`{ cursor }`). `cursorPaginate` is forward-only and leaves `prevCursor` null.
+count), and `cursorPaginate` (key-set). Cursor pagination takes one column
+(`column`/`direction`) or several (`order`), and returns `nextCursor`,
+`prevCursor`, `hasMore` and `hasPrevious` — feed either cursor back in to walk
+forwards or backwards:
+
+```ts
+const page = await Post.query().cursorPaginate(20, {
+	order: [{ column: "views", direction: "desc" }, { column: "id" }],
+});
+const next = page.nextCursor
+	? await Post.query().cursorPaginate(20, {
+			order: [{ column: "views", direction: "desc" }, { column: "id" }],
+			cursor: page.nextCursor,
+		})
+	: null;
+const previous = page.prevCursor; // null on the first page
+```
 
 ```ts
 const compiled = orm.table("users").where("id", 1).toSQL();
 // { sql: 'select * from "users" where ("id" = ?)', parameters: [1] }
 
 await orm.table("posts").where("userId", 1).increment("views", 2);
-
-const firstPage = await Post.query().cursorPaginate(20);
-const secondPage = firstPage.nextCursor
-	? await Post.query().cursorPaginate(20, { cursor: firstPage.nextCursor })
-	: null;
 ```
 
 Model statics add `firstOrCreate(attributes, values?)`,
@@ -679,6 +705,7 @@ pending migrations without executing them:
 ```ts
 await migrator.pretend(); // [{ migration, direction: "up", statements }]
 await migrator.refresh();
+const dropped = await migrator.dropAllTables(); // ["users", "posts", …]
 ```
 
 ### Schema extras
@@ -686,10 +713,12 @@ await migrator.refresh();
 Table builders cover `char`, `tinyInteger`, `smallInteger`, `mediumInteger`,
 `jsonb`, `unsigned()`, `useCurrent()`, `constrained()`, `foreignIdFor(Model)`
 and variadic `dropColumn([...])`. Existing tables can
-`dropUnique(name)` / `dropForeign(name)` on MySQL/PostgreSQL (SQLite throws
-`SchemaError` — recreate the table instead). Foreign keys are emitted as named
-table-level constraints on every dialect, including MySQL where inline
-`references` is parsed but ignored.
+`dropUnique(name)` / `dropForeign(name)` on every dialect: MySQL tries
+`drop foreign key` then `drop index`, PostgreSQL tries `drop constraint` then
+`drop index`, and SQLite drops a named unique index directly or rebuilds the
+table (copy, drop, rename, recreate indexes) for a named constraint. Foreign
+keys are emitted as named table-level constraints on every dialect, including
+MySQL where inline `references` is parsed but ignored.
 
 ### Factories and seeders
 
@@ -705,10 +734,14 @@ await runSeeders(orm, [
 	async (db) => { await db.table("countries").insert({ name: "Seeded" }); },
 	{ run: async () => { /* … */ } },
 ]);
+// All-or-nothing:
+await runSeeders(orm, seeders, { transaction: true });
 ```
 
 Factory values go through the same mass-assignment rules as `create()`
 (`fillable`/`guarded`), and definitions may be functions of the row index.
+`runSeeders` runs the list sequentially; pass `{ transaction: true }`
+(Eloquent's `--isolated`) to wrap the whole list in one transaction.
 
 ### Pruning
 
@@ -723,7 +756,9 @@ await ExpiredSession.prune(500); // default chunk size: 1000
 ```
 
 Pruning honors the model's soft-delete scope (rows are trashed, not destroyed)
-and returns the affected count. Pruning does not fire model events.
+and returns the affected count. Each chunk is deleted per instance, so
+`deleting`/`deleted` (and `trashed`) fire and a `deleting` listener can cancel
+individual rows.
 
 ### Multiple connections
 
@@ -815,18 +850,20 @@ without a database.
 | `bun run typecheck:tests` | `tsc --noEmit` over tests, type tests, benchmarks, examples |
 | `bun run check` | Biome format + lint |
 | `bun run build` | ESM build + `.d.ts` to `dist/` |
+| `bun run smoke` | Runs the built package under Node against SQLite (add the live URLs for MySQL/PostgreSQL) |
 | `bun run bench` | Benchmark suite vs raw driver, Kysely and Drizzle |
 | `bun run examples/blog.ts` | Runnable end-to-end walkthrough |
 
 ## Verification
 
 `bun test` runs the full SQLite integration suite live, plus compile-time type
-contracts and per-dialect SQL assertions; the packed artifact is smoke-tested
-standalone on Bun and Node 24, including live MySQL/PostgreSQL runs on both
-runtimes. With both live URLs configured the full gate is
-**201 pass, 0 fail** (900 assertions across 10 files); without them the same
-command is **165 pass, 2 skip, 0 fail** (167 tests, 704 assertions), skipping
-only the two env-gated dialect entry points. Full evidence, methodology and honest
+contracts and per-dialect SQL assertions. `tests/node/smoke.mjs` exercises the
+built and the packed (`bun pm pack`) package under Node 24 against SQLite,
+MySQL and PostgreSQL — the `node-runtime` job in `.github/workflows/orm.yml`
+runs it on every push. With both live URLs configured the full gate is
+**328 pass, 0 fail** (1593 assertions across 12 files); without them the same
+command is **262 pass, 2 skip, 0 fail** (264 tests), skipping only the two
+env-gated dialect entry points. Full evidence, methodology and honest
 verification status: [REPORT.md](REPORT.md).
 
 ## Benchmarks
@@ -853,16 +890,17 @@ dirty tracking) and is still the same order of magnitude as Kysely.
 
 See [docs/limitations.md](docs/limitations.md). Highlights: instance-level
 relation/load names are runtime-validated (use `RelationManagerOf` for the
-compile-time manager surface); relation paths nest up to 3 levels; generic
+compile-time manager surface); relation paths nest up to 4 levels; generic
 `morphTo` constraints/aggregates are unsupported (`whereHasMorph` covers
-alias-scoped filters); self-referential nested `whereHas` can be ambiguous at
-depth ≥ 2; cursor pagination is forward-only on one column; SQLite has no JSON
-overlap operator and cannot drop constraints; cast read values (including
-`decimal:<n>` and `date:<fmt>` strings) need narrowing; `migrator.fresh()` drops
-every table; transactions are scoped per connection; 64-bit precision requires
-the documented BigInt mode, and raw SQL/JSON need the documented conversions;
-live MySQL/PostgreSQL suites are env-gated and skip cleanly unless
-`BARQ_ORM_MYSQL_URL` / `BARQ_ORM_PG_URL` point at scratch servers (CI sets
+alias-scoped filters); self-referential nested `whereHas` aliases each shadowed
+step; cursor pagination is bidirectional and multi-column but has no total;
+SQLite constraint drops rebuild the table; cast read values (including
+`decimal:<n>` and `date:<fmt>` strings) need narrowing; `migrator.fresh()` and
+`dropAllTables()` drop every table; transactions are scoped per connection;
+64-bit precision requires the documented BigInt mode, and raw SQL/JSON need the
+documented conversions; live MySQL/PostgreSQL suites are env-gated and skip
+cleanly unless `BARQ_ORM_MYSQL_URL` / `BARQ_ORM_PG_URL` point at scratch servers
+(CI sets
 both).
 
 ## License
