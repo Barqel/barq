@@ -31,7 +31,7 @@ export function sanitizePath(
 }
 
 export function isDotFile(path: string): boolean {
-	const segments = path.split(/[\/\\]/);
+	const segments = path.split(/[/\\]/);
 	for (const segment of segments) {
 		if (segment.startsWith(".") && segment !== "." && segment !== "..") {
 			return true;

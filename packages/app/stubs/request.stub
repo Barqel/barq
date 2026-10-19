@@ -1,0 +1,12 @@
+import { BaseRequest, injectable, r } from "@barqel/barq-app";
+
+// Extend BaseRequest for JSON bodies — or ParamsRequest / QueryRequest /
+// HeadersRequest to validate that part of the request with the same engine.
+@injectable()
+export class {{className}} extends BaseRequest {
+	rules() {
+		return {
+			// name: r.string().trim().min(2).max(50),
+		};
+	}
+}

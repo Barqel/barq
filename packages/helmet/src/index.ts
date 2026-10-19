@@ -2,8 +2,8 @@ import type { App, Context, Middleware } from "@barqel/barq";
 import { buildHelmetHeaders } from "./headers";
 import type { HelmetOptions } from "./types";
 
-export * from "./types";
 export { buildHelmetHeaders } from "./headers";
+export * from "./types";
 
 export function helmet(options: HelmetOptions = {}): Middleware {
 	const staticHeaders = buildHelmetHeaders(options);

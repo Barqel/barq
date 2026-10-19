@@ -84,6 +84,7 @@ export class Cli {
 				console.error(
 					`${RED}Error: Missing required argument <${def.name}>${RESET}`,
 				);
+				this.showCommandHelp(cmd);
 				process.exitCode = 1;
 				return;
 			}
@@ -103,6 +104,7 @@ export class Cli {
 			}
 			if (flagDef.required && val === undefined) {
 				console.error(`${RED}Error: Missing required flag --${name}${RESET}`);
+				this.showCommandHelp(cmd);
 				process.exitCode = 1;
 				return;
 			}

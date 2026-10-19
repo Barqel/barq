@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { App, json } from "@barqel/barq";
 import {
 	type LogRecord,
-	type RequestLogger,
 	loggerPlugin,
+	type RequestLogger,
 	requestLogger,
 } from "../src/index";
 

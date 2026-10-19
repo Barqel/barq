@@ -1,5 +1,5 @@
-import { createBrotliCompress } from "node:zlib";
 import { Readable } from "node:stream";
+import { createBrotliCompress } from "node:zlib";
 import type { CompressionAlgorithm } from "./types";
 
 export function compressStream(
@@ -8,13 +8,17 @@ export function compressStream(
 ): ReadableStream<Uint8Array> {
 	if (algorithm === "gzip") {
 		return stream.pipeThrough(
-			new CompressionStream("gzip") as unknown as ReadableWritablePair<Uint8Array>,
+			new CompressionStream(
+				"gzip",
+			) as unknown as ReadableWritablePair<Uint8Array>,
 		);
 	}
 
 	if (algorithm === "deflate") {
 		return stream.pipeThrough(
-			new CompressionStream("deflate") as unknown as ReadableWritablePair<Uint8Array>,
+			new CompressionStream(
+				"deflate",
+			) as unknown as ReadableWritablePair<Uint8Array>,
 		);
 	}
 

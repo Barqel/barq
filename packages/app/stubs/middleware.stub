@@ -1,0 +1,26 @@
+import { type Context, type Middleware } from "@barqel/barq-app";
+
+/**
+ * `{{name}}` middleware.
+ *
+ * `before` runs ahead of the handler — return nothing to continue, an
+ * object to merge into `ctx.state`, or a `Response` to short-circuit.
+ * `after(ctx, res)` can still run on the way out.
+ *
+ * Attach per route (composes like `idempotencyMiddleware`):
+ *   users.post("/", {{className}}(), handler);
+ *
+ * …or app-wide in `barq.config.ts`:
+ *   configure: (app) => app.use({{className}}()),
+ */
+export function {{className}}(): Middleware {
+	return {
+		before(ctx: Context) {
+			// Write your logic here — ctx.state, ctx.t(...) and the request
+			// headers are all available.
+		},
+		// after(ctx: Context, res: Response) {
+		// 	return res;
+		// },
+	};
+}

@@ -1,0 +1,13 @@
+import { Cron, injectable, Job } from "@barqel/barq-app";
+
+@injectable()
+export class {{className}} extends Job {
+	readonly name = "{{name}}";
+
+	/** `Cron.hourly` · `Cron.daily` · `Cron.at("03:30")` · `Cron.every(10, "minutes")`. */
+	readonly schedule = Cron.hourly;
+
+	async handle(): Promise<void> {
+		// Write your logic here — jobs run outside any request scope.
+	}
+}

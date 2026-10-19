@@ -1,5 +1,12 @@
-import { App, type Context, HttpError, RouteGroup, json } from "@barqel/barq";
+import {
+	type App,
+	type Context,
+	HttpError,
+	json,
+	type RouteGroup,
+} from "@barqel/barq";
 import { OpenAPIRegistry } from "./registry";
+import { readRouteMeta, routeSchemaFromMeta } from "./route-meta";
 import type {
 	OpenAPIOptions,
 	RouteConfig,
@@ -8,9 +15,19 @@ import type {
 } from "./types";
 import { renderScalarHtml, renderSwaggerHtml } from "./ui";
 
-export * from "./types";
-export { OpenAPIRegistry, toOpenApiPath } from "./registry";
 export { toJsonSchema } from "./json-schema";
+export { OpenAPIRegistry, toOpenApiPath } from "./registry";
+export type {
+	HandlerDocs,
+	HandlerRouteMeta,
+	HandlerSource,
+} from "./route-meta";
+export {
+	ROUTE_META,
+	readRouteMeta,
+	routeSchemaFromMeta,
+} from "./route-meta";
+export * from "./types";
 
 async function executeValidate(
 	validator: unknown,
@@ -112,6 +129,11 @@ const HTTP_METHODS = [
 	"all",
 ] as const;
 
+function withPrefix(prefix: string, pattern: string): string {
+	if (!prefix) return pattern;
+	return pattern === "/" ? prefix : `${prefix}${pattern}`;
+}
+
 function wrapRouter(
 	router: App<any> | RouteGroup<any, any>,
 	registry: OpenAPIRegistry,
@@ -131,12 +153,11 @@ function wrapRouter(
 				const schema = config.schema;
 
 				if (schema) {
-					const fullPath = prefix
-						? pattern === "/"
-							? prefix
-							: `${prefix}${pattern}`
-						: pattern;
-					registry.addRoute(method.toUpperCase(), fullPath, schema);
+					registry.addRoute(
+						method.toUpperCase(),
+						withPrefix(prefix, pattern),
+						schema,
+					);
 					const validationMw = createValidationMiddleware(schema);
 					return original(
 						pattern,
@@ -147,6 +168,18 @@ function wrapRouter(
 				}
 
 				return original(pattern, ...(config.middlewares ?? []), ...remaining);
+			}
+
+			// `action` routes carry their own metadata: derive and
+			// register the docs automatically. Validation stays with the
+			// request engine — no plugin pre-parsing of the body.
+			const meta = readRouteMeta(args);
+			if (meta && method !== "all") {
+				registry.addRoute(
+					method.toUpperCase(),
+					withPrefix(prefix, pattern),
+					routeSchemaFromMeta(meta),
+				);
 			}
 
 			return original(pattern, ...args);

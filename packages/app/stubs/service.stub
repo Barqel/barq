@@ -1,0 +1,7 @@
+import { injectable } from "@barqel/barq-app";
+// import { XRepository } from "@/repositories/x";
+
+@injectable()
+export class {{className}} {
+	// constructor(private readonly repository: XRepository) {}
+}

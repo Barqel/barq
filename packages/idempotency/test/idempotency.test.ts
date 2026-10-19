@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { App, json } from "@barqel/barq";
 import {
-	MemoryIdempotencyStore,
 	idempotency,
 	idempotencyPlugin,
+	MemoryIdempotencyStore,
 } from "../src/index";
 
 describe("@barqel/barq-idempotency", () => {

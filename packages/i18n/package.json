@@ -1,6 +1,6 @@
 {
 	"name": "@barqel/barq-i18n",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Zero-dependency, high-performance API internationalization and translation plugin for Barq",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -11,9 +11,16 @@
 			"import": "./dist/index.js"
 		}
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
-		"build": "bun build src/index.ts --external @barqel/barq --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
-		"test": "bun test"
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check .",
+		"build": "rm -rf dist && bun build src/index.ts --external @barqel/barq --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
+		"test": "bun test",
+		"prepublishOnly": "bun run check && bun test && bun run build"
 	},
 	"files": [
 		"dist"
@@ -22,6 +29,7 @@
 		"@barqel/barq": ">=1.0.0"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.5.15",
 		"@types/bun": "^1.2.0",
 		"@types/node": "^20.0.0",
 		"typescript": "^5.0.0"

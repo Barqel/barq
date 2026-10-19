@@ -1,6 +1,6 @@
 import type { Context, Middleware } from "@barqel/barq";
-import { Logger, defaultGenerateId } from "./logger";
-import type { LogLevel, LoggerOptions } from "./types";
+import { defaultGenerateId, Logger } from "./logger";
+import type { LoggerOptions, LogLevel } from "./types";
 
 export function requestLogger(options: LoggerOptions = {}): Middleware {
 	const logger = new Logger(options);

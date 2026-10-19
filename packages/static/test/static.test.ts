@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { App } from "@barqel/barq";
-import { serveStatic, staticFiles } from "../src/index";
+import { staticFiles } from "../src/index";
 
 const TEST_DIR = join(import.meta.dir, "tmp_static_test");
 

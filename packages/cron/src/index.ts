@@ -2,10 +2,11 @@ import type { App } from "@barqel/barq";
 import { CronScheduler } from "./scheduler";
 import type { CronJobOptions, CronTask } from "./types";
 
-export * from "./types";
-export * from "./parser";
 export * from "./job";
+export * from "./parser";
+export * from "./presets";
 export * from "./scheduler";
+export * from "./types";
 
 export function cron() {
 	const scheduler = new CronScheduler();

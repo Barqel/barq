@@ -1,8 +1,14 @@
+import type { EventDefinition } from "./event";
 import type { EventBusOptions, EventListener } from "./types";
 
 interface ListenerWrapper {
 	fn: EventListener;
 	once: boolean;
+}
+
+/** Every public entry point accepts a string name or an event contract. */
+function resolveEventName(event: string | EventDefinition): string {
+	return typeof event === "string" ? event : event.name;
 }
 
 export class EventBus<
@@ -24,26 +30,30 @@ export class EventBus<
 		};
 	}
 
+	on<P>(event: EventDefinition<P>, listener: EventListener<P>): () => void;
 	on<K extends keyof TEvents & string>(
 		event: K,
 		listener: EventListener<TEvents[K]>,
 	): () => void;
 	on(event: string, listener: EventListener): () => void;
-	on(event: string, listener: EventListener): () => void {
-		return this.addListener(event, listener, false);
+	on(event: string | EventDefinition, listener: EventListener): () => void {
+		return this.addListener(resolveEventName(event), listener, false);
 	}
 
+	once<P>(event: EventDefinition<P>, listener: EventListener<P>): () => void;
 	once<K extends keyof TEvents & string>(
 		event: K,
 		listener: EventListener<TEvents[K]>,
 	): () => void;
 	once(event: string, listener: EventListener): () => void;
-	once(event: string, listener: EventListener): () => void {
-		return this.addListener(event, listener, true);
+	once(event: string | EventDefinition, listener: EventListener): () => void {
+		return this.addListener(resolveEventName(event), listener, true);
 	}
 
-	off(event: string, listener: EventListener): void {
-		if (this.options.wildcards && event.includes("*")) {
+	off(event: string | EventDefinition, listener: EventListener): void {
+		const name = resolveEventName(event);
+
+		if (this.options.wildcards && name.includes("*")) {
 			for (const item of this.wildcardListeners) {
 				if (item.wrapper.fn === listener) {
 					this.wildcardListeners.delete(item);
@@ -52,7 +62,7 @@ export class EventBus<
 			return;
 		}
 
-		const set = this.listeners.get(event);
+		const set = this.listeners.get(name);
 		if (!set) return;
 
 		for (const item of set) {
@@ -63,57 +73,79 @@ export class EventBus<
 		}
 
 		if (set.size === 0) {
-			this.listeners.delete(event);
+			this.listeners.delete(name);
 		}
 	}
 
+	async emit<P>(event: EventDefinition<P>, payload: P): Promise<void>;
 	async emit<K extends keyof TEvents & string>(
 		event: K,
 		payload: TEvents[K],
 	): Promise<void>;
 	async emit(event: string, payload?: unknown): Promise<void>;
-	async emit(event: string, payload?: unknown): Promise<void> {
-		return this.emitParallel(event, payload);
+	async emit(
+		event: string | EventDefinition,
+		payload?: unknown,
+	): Promise<void> {
+		return this.emitParallel(resolveEventName(event), payload);
 	}
 
-	async emitParallel(event: string, payload?: unknown): Promise<void> {
-		const matched = this.collectListeners(event);
+	async emitParallel<P>(
+		event: EventDefinition<P>,
+		payload: P,
+	): Promise<void>;
+	async emitParallel(event: string, payload?: unknown): Promise<void>;
+	async emitParallel(
+		event: string | EventDefinition,
+		payload?: unknown,
+	): Promise<void> {
+		const name = resolveEventName(event);
+		const matched = this.collectListeners(name);
 		if (matched.length === 0) return;
 
 		const promises = matched.map(async (wrapper) => {
 			try {
-				await Promise.resolve(wrapper.fn(payload, event));
+				await Promise.resolve(wrapper.fn(payload, name));
 			} catch (err) {
-				this.handleError(err, event, payload);
+				this.handleError(err, name, payload);
 			}
 		});
 
 		await Promise.all(promises);
 	}
 
-	async emitSerial(event: string, payload?: unknown): Promise<void> {
-		const matched = this.collectListeners(event);
+	async emitSerial<P>(event: EventDefinition<P>, payload: P): Promise<void>;
+	async emitSerial(event: string, payload?: unknown): Promise<void>;
+	async emitSerial(
+		event: string | EventDefinition,
+		payload?: unknown,
+	): Promise<void> {
+		const name = resolveEventName(event);
+		const matched = this.collectListeners(name);
 		for (const wrapper of matched) {
 			try {
-				await Promise.resolve(wrapper.fn(payload, event));
+				await Promise.resolve(wrapper.fn(payload, name));
 			} catch (err) {
-				this.handleError(err, event, payload);
+				this.handleError(err, name, payload);
 			}
 		}
 	}
 
-	emitSync(event: string, payload?: unknown): void {
-		const matched = this.collectListeners(event);
+	emitSync<P>(event: EventDefinition<P>, payload: P): void;
+	emitSync(event: string, payload?: unknown): void;
+	emitSync(event: string | EventDefinition, payload?: unknown): void {
+		const name = resolveEventName(event);
+		const matched = this.collectListeners(name);
 		for (const wrapper of matched) {
 			try {
-				const result = wrapper.fn(payload, event);
+				const result = wrapper.fn(payload, name);
 				if (result && typeof (result as any).catch === "function") {
 					(result as any).catch((err: unknown) =>
-						this.handleError(err, event, payload),
+						this.handleError(err, name, payload),
 					);
 				}
 			} catch (err) {
-				this.handleError(err, event, payload);
+				this.handleError(err, name, payload);
 			}
 		}
 	}

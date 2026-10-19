@@ -1,4 +1,4 @@
-import { type Context, type Middleware, json } from "@barqel/barq";
+import { type Context, json, type Middleware } from "@barqel/barq";
 import { MemoryStore } from "./store";
 import type { RateLimitInfo, RateLimitOptions, RateLimitStore } from "./types";
 

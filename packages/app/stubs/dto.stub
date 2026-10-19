@@ -1,0 +1,5 @@
+/** DTO — the public shape returned to callers (never the raw entity). */
+export interface {{className}} {
+	// TODO: list the fields callers can see
+	id: string;
+}

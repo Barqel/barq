@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { App, json, text } from "@barqel/barq";
+import { App, json } from "@barqel/barq";
 import { compressPlugin } from "../src/index";
 
 describe("@barqel/barq-compress", () => {

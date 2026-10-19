@@ -2,10 +2,10 @@ import type { App } from "@barqel/barq";
 import { createStaticHandler } from "./handler";
 import type { StaticHandler, StaticOptions } from "./types";
 
-export * from "./types";
+export { createStaticHandler } from "./handler";
 export * from "./mime";
 export * from "./security";
-export { createStaticHandler } from "./handler";
+export * from "./types";
 
 export function serveStatic(options: StaticOptions): StaticHandler {
 	return createStaticHandler(options);

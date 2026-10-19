@@ -7,7 +7,7 @@ const cli = createCli({
 });
 
 cli.command(
-	"make:service <name>",
+	"service:make <name>",
 	{
 		description: "Create a new microservice boilerplate",
 		flags: {

@@ -1,0 +1,11 @@
+import { json, singleton, type Context } from "@barqel/barq-app";
+// import { XService } from "@/services/x";
+
+@singleton()
+export class {{className}} {
+	// constructor(private readonly service: XService) {}
+
+	async index(ctx: Context) {
+		return json({ success: true, data: [] });
+	}
+}

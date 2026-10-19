@@ -1,0 +1,13 @@
+import { injectable } from "@barqel/barq-app";
+
+export interface XRecord {
+	id: string;
+}
+
+@injectable()
+export class {{className}} {
+	async findById(_id: string): Promise<XRecord | null> {
+		// TODO: replace with real data access (database, API, …)
+		return null;
+	}
+}

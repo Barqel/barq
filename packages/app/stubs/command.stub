@@ -1,0 +1,11 @@
+import { Command, type CommandContext } from "@barqel/barq-app";
+
+export class {{className}} extends Command {
+	readonly signature = "{{signature}}";
+	// override readonly flags = { verbose: { type: "boolean", alias: "v" } };
+
+	async handle(ctx: CommandContext): Promise<void> {
+		// ctx.args / ctx.flags / ctx.log.info | success | warn | error | table
+		ctx.log.success("{{signature}} ran successfully");
+	}
+}

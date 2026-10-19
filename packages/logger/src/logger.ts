@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { formatJson, formatPretty, shouldLog } from "./format";
 import type {
+	LoggerOptions,
 	LogLevel,
 	LogRecord,
-	LoggerOptions,
 	RequestLogger,
 } from "./types";
 

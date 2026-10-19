@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
+	Cron,
+	type CronDay,
 	CronJob,
 	CronScheduler,
 	getNextCronRun,
@@ -73,7 +75,7 @@ describe("@barqel/barq-cron", () => {
 			name: "daily_sync",
 			autoStart: false,
 		});
-		const j2 = scheduler.add("@hourly", () => {}, {
+		scheduler.add("@hourly", () => {}, {
 			name: "hourly_cache",
 			autoStart: false,
 		});
@@ -84,5 +86,52 @@ describe("@barqel/barq-cron", () => {
 		expect(scheduler.remove("daily_sync")).toBe(true);
 		expect(scheduler.get("daily_sync")).toBeUndefined();
 		scheduler.clear();
+	});
+
+	it("builds readable schedules with Cron helpers", () => {
+		expect(Cron.hourly).toBe("0 * * * *");
+		expect(Cron.daily).toBe("0 0 * * *");
+		expect(Cron.weekly).toBe("0 0 * * 0");
+		expect(Cron.every(30, "seconds")).toBe("@every 30s");
+		expect(Cron.every(10)).toBe("@every 10m");
+		expect(Cron.every(2, "hours")).toBe("@every 2h");
+		expect(Cron.at("03:30")).toBe("30 3 * * *");
+		expect(Cron.at("3:30")).toBe("30 3 * * *");
+		expect(Cron.on("friday", "17:00")).toBe("0 17 * * 5");
+		expect(Cron.on("monday")).toBe("0 0 * * 1");
+	});
+
+	it("parses every Cron helper output", () => {
+		const expressions = [
+			Cron.everyMinute,
+			Cron.everyFiveMinutes,
+			Cron.everyTenMinutes,
+			Cron.everyFifteenMinutes,
+			Cron.everyThirtyMinutes,
+			Cron.hourly,
+			Cron.daily,
+			Cron.weekly,
+			Cron.monthly,
+			Cron.yearly,
+			Cron.every(45, "seconds"),
+			Cron.every(10, "minutes"),
+			Cron.every(6, "hours"),
+			Cron.at("03:30"),
+			Cron.on("friday", "17:00"),
+		];
+
+		for (const expression of expressions) {
+			expect(() => parseCronExpression(expression)).not.toThrow();
+		}
+	});
+
+	it("rejects invalid Cron helper inputs", () => {
+		expect(() => Cron.every(0)).toThrow("positive whole number");
+		expect(() => Cron.every(2.5, "minutes")).toThrow("positive whole number");
+		expect(() => Cron.every(90, "minutes")).toThrow("too large");
+		expect(() => Cron.every(24, "hours")).toThrow("too large");
+		expect(() => Cron.at("25:00")).toThrow('expected "HH:mm"');
+		expect(() => Cron.at("noon")).toThrow('expected "HH:mm"');
+		expect(() => Cron.on("noday" as CronDay)).toThrow("Invalid weekday");
 	});
 });

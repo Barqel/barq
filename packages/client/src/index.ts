@@ -2,10 +2,10 @@ import type { App, Context } from "@barqel/barq";
 import { BarqClient } from "./client";
 import type { ClientOptions } from "./types";
 
-export * from "./types";
 export * from "./circuit-breaker";
-export * from "./retry";
 export * from "./client";
+export * from "./retry";
+export * from "./types";
 
 export function createClient(options: ClientOptions = {}): BarqClient {
 	return new BarqClient(options);

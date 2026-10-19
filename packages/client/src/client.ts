@@ -145,7 +145,9 @@ export class BarqClient {
 
 		if (options.headers) {
 			if (options.headers instanceof Headers) {
-				options.headers.forEach((v, k) => headers.set(k, v));
+				options.headers.forEach((v, k) => {
+					headers.set(k, v);
+				});
 			} else {
 				for (const [k, v] of Object.entries(options.headers)) {
 					headers.set(k, v);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { EventBus } from "../src/index";
+import { defineEvent, EventBus } from "../src/index";
 
 describe("@barqel/barq-events", () => {
 	it("emits events and handles listeners asynchronously", async () => {
@@ -60,5 +60,40 @@ describe("@barqel/barq-events", () => {
 
 		await bus.emitSerial("step");
 		expect(trace).toEqual([1, 2]);
+	});
+
+	it("routes defineEvent contracts by name across independent objects", async () => {
+		const bus = new EventBus();
+		const consumer = defineEvent<{ id: string }>("user.updated");
+		const producer = defineEvent<{ id: string }>("user.updated");
+		let captured: { id: string } | null = null;
+
+		bus.on(consumer, (payload) => {
+			captured = payload;
+		});
+
+		await bus.emit(producer, { id: "u1" });
+
+		expect(consumer.name).toBe("user.updated");
+		expect(captured).toEqual({ id: "u1" });
+	});
+
+	it("accepts event contracts in once, off and emitSync", () => {
+		const bus = new EventBus();
+		const ping = defineEvent<{ at: number }>("ping");
+		const calls: number[] = [];
+
+		const unsubscribe = bus.on(ping, (payload) => {
+			calls.push(payload.at);
+		});
+		bus.once(ping, (payload) => {
+			calls.push(payload.at * 10);
+		});
+
+		bus.emitSync(ping, { at: 1 });
+		unsubscribe();
+		bus.emitSync(ping, { at: 2 });
+
+		expect(calls).toEqual([1, 10]);
 	});
 });

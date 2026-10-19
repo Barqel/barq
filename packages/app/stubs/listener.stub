@@ -1,0 +1,10 @@
+import { injectable, Listener, type PayloadOf } from "@barqel/barq-app";
+
+@injectable()
+export class {{className}} extends Listener.of<Record<string, unknown>>(
+	"{{event}}",
+) {
+	async handle(payload: PayloadOf<this>): Promise<void> {
+		// Write your logic here — fan out to services, never block the emitter.
+	}
+}

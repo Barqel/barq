@@ -1,8 +1,8 @@
 import type { Context, Middleware } from "@barqel/barq";
-import { compressStream } from "./engine";
 import { negotiateEncoding } from "./encoding";
+import { compressStream } from "./engine";
 import { defaultCompressFilter } from "./filter";
-import type { CompressOptions, CompressionAlgorithm } from "./types";
+import type { CompressionAlgorithm, CompressOptions } from "./types";
 
 export function compress(options: CompressOptions = {}): Middleware {
 	const threshold = options.threshold ?? 1024;

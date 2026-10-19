@@ -18,7 +18,7 @@ export function computeBackoffDelay(
 	const maxDelay = options.maxDelayMs ?? 2000;
 	const factor = options.backoffFactor ?? 2;
 
-	const exponential = minDelay * Math.pow(factor, attempt);
+	const exponential = minDelay * factor ** attempt;
 	const jitter = Math.random() * (minDelay * 0.5);
 	return Math.min(maxDelay, exponential + jitter);
 }

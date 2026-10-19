@@ -2,8 +2,9 @@ import type { App, Context } from "@barqel/barq";
 import { EventBus } from "./bus";
 import type { EventBusOptions } from "./types";
 
-export * from "./types";
 export * from "./bus";
+export * from "./event";
+export * from "./types";
 
 export function eventsPlugin<
 	TEvents extends Record<string, any> = Record<string, any>,

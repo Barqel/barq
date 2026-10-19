@@ -21,7 +21,7 @@ export function negotiateLocale(
 		let q = 1;
 		if (rawQ) {
 			const match = /q=([0-9.]+)/i.exec(rawQ);
-			if (match && match[1]) {
+			if (match?.[1]) {
 				const parsed = Number.parseFloat(match[1]);
 				if (!Number.isNaN(parsed)) q = parsed;
 			}

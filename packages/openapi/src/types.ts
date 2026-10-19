@@ -1,4 +1,4 @@
-import type { Context, HttpMethod, Middleware } from "@barqel/barq";
+import type { Middleware } from "@barqel/barq";
 
 export interface StandardSchemaV1Issue {
 	readonly message: string;

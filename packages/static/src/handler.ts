@@ -1,4 +1,3 @@
-import { statSync } from "node:fs";
 import { open, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { type Context, empty } from "@barqel/barq";
@@ -97,11 +96,7 @@ export function createStaticHandler(options: StaticOptions): StaticHandler {
 		const mimeType = getMimeType(absolute);
 		const rangeHeader = ctx.req.headers.get("range");
 
-		if (
-			rangeHeader &&
-			rangeHeader.startsWith("bytes=") &&
-			!rangeHeader.includes(",")
-		) {
+		if (rangeHeader?.startsWith("bytes=") && !rangeHeader.includes(",")) {
 			const rangeRes = await handleRangeRequest(
 				absolute,
 				fileStat.size,

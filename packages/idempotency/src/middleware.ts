@@ -1,4 +1,4 @@
-import { type Context, HttpError, type Middleware, json } from "@barqel/barq";
+import { type Context, HttpError, json, type Middleware } from "@barqel/barq";
 import { MemoryIdempotencyStore } from "./store";
 import type { IdempotencyOptions, IdempotencyStore } from "./types";
 

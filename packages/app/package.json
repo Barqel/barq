@@ -1,0 +1,74 @@
+{
+	"name": "@barqel/barq-app",
+	"version": "1.0.0",
+	"description": "The Barq application framework: batteries-included kernel, base classes, generators and testing helpers for building apps with Barq + Bun",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"bin": {
+		"barq": "./bin/barq.ts"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check .",
+		"build": "rm -rf dist && bun build src/index.ts --external @barqel/barq --external @barqel/barq-cli --external @barqel/barq-compress --external @barqel/barq-cron --external @barqel/barq-env --external @barqel/barq-events --external @barqel/barq-helmet --external @barqel/barq-i18n --external @barqel/barq-idempotency --external @barqel/barq-logger --external @barqel/barq-openapi --external @barqel/barq-rate-limit --external @barqel/barq-static --external reflect-metadata --external tsyringe --external zod --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "bun run check && bun run typecheck && bun test && bun run build"
+	},
+	"files": [
+		"dist",
+		"bin",
+		"stubs"
+	],
+	"dependencies": {
+		"@barqel/barq": "^1.0.3",
+		"@barqel/barq-cli": "^1.0.0",
+		"@barqel/barq-compress": "^1.0.0",
+		"@barqel/barq-cron": "^1.0.0",
+		"@barqel/barq-env": "^1.0.0",
+		"@barqel/barq-events": "^1.0.0",
+		"@barqel/barq-helmet": "^1.0.1",
+		"@barqel/barq-i18n": "^1.0.1",
+		"@barqel/barq-idempotency": "^1.0.0",
+		"@barqel/barq-logger": "^1.0.0",
+		"@barqel/barq-openapi": "^1.0.0",
+		"@barqel/barq-rate-limit": "^1.0.0",
+		"@barqel/barq-static": "^1.0.0",
+		"reflect-metadata": "^0.2.2",
+		"tsyringe": "^4.10.0",
+		"zod": "^4.6.6"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.15",
+		"@types/bun": "^1.2.0",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.0.0"
+	},
+	"keywords": [
+		"barq",
+		"framework",
+		"bun",
+		"starter",
+		"typescript",
+		"api"
+	],
+	"author": "Barq Contributors",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Barqel/barq.git",
+		"directory": "packages/app"
+	},
+	"homepage": "https://github.com/Barqel/barq#readme"
+}

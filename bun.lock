@@ -18,6 +18,37 @@
         "bun",
       ],
     },
+    "packages/app": {
+      "name": "@barqel/barq-app",
+      "version": "1.0.0",
+      "bin": {
+        "barq": "./bin/barq.ts",
+      },
+      "dependencies": {
+        "@barqel/barq": "^1.0.3",
+        "@barqel/barq-cli": "^1.0.0",
+        "@barqel/barq-compress": "^1.0.0",
+        "@barqel/barq-cron": "^1.0.0",
+        "@barqel/barq-env": "^1.0.0",
+        "@barqel/barq-events": "^1.0.0",
+        "@barqel/barq-helmet": "^1.0.1",
+        "@barqel/barq-i18n": "^1.0.1",
+        "@barqel/barq-idempotency": "^1.0.0",
+        "@barqel/barq-logger": "^1.0.0",
+        "@barqel/barq-openapi": "^1.0.0",
+        "@barqel/barq-rate-limit": "^1.0.0",
+        "@barqel/barq-static": "^1.0.0",
+        "reflect-metadata": "^0.2.2",
+        "tsyringe": "^4.10.0",
+        "zod": "^4.6.6",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
+        "@types/bun": "^1.2.0",
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+      },
+    },
     "packages/auth": {
       "name": "@barqel/barq-auth",
       "version": "1.0.0",
@@ -46,6 +77,7 @@
       "name": "@barqel/barq-cli",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -58,6 +90,7 @@
       "name": "@barqel/barq-client",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -70,6 +103,7 @@
       "name": "@barqel/barq-compress",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -82,6 +116,7 @@
       "name": "@barqel/barq-cron",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -107,6 +142,7 @@
       "name": "@barqel/barq-events",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -117,8 +153,9 @@
     },
     "packages/helmet": {
       "name": "@barqel/barq-helmet",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -129,8 +166,9 @@
     },
     "packages/i18n": {
       "name": "@barqel/barq-i18n",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -143,6 +181,7 @@
       "name": "@barqel/barq-idempotency",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -155,6 +194,7 @@
       "name": "@barqel/barq-logger",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -167,6 +207,7 @@
       "name": "@barqel/barq-openapi",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -240,6 +281,7 @@
       "name": "@barqel/barq-rate-limit",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -264,6 +306,7 @@
       "name": "@barqel/barq-static",
       "version": "1.0.0",
       "devDependencies": {
+        "@biomejs/biome": "^2.5.15",
         "@types/bun": "^1.2.0",
         "@types/node": "^20.0.0",
         "typescript": "^5.0.0",
@@ -336,7 +379,9 @@
     },
   },
   "packages": {
-    "@barqel/barq": ["@barqel/barq@1.0.1", "", { "peerDependencies": { "bun": ">=1.1.0" }, "optionalPeers": ["bun"] }, "sha512-YTYHLqe8eFdt1CM3vm9Ltfogw/hFmapYd8BafPnEV9Bk/jpQfonkGzStb3Yg40yrJR9Iz7DWHSQuCxFC9wAJAg=="],
+    "@barqel/barq": ["@barqel/barq@1.0.3", "", { "peerDependencies": { "bun": ">=1.1.0" }, "optionalPeers": ["bun"] }, "sha512-Ov4GYjItoULVHScMH9tQ8KHRIiPmHoJQQ5HPy2oZ10kh671aWybizWaFJqUGh/dHD86OzBEN08GuJDTkkHU2aQ=="],
+
+    "@barqel/barq-app": ["@barqel/barq-app@workspace:packages/app"],
 
     "@barqel/barq-auth": ["@barqel/barq-auth@workspace:packages/auth"],
 
@@ -458,11 +503,17 @@
 
     "postgres-interval": ["postgres-interval@1.2.0", "", { "dependencies": { "xtend": "^4.0.0" } }, "sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ=="],
 
+    "reflect-metadata": ["reflect-metadata@0.2.2", "", {}, "sha512-urBwgfrvVP/eAyXx4hluJivBKzuEbSQs9rKWCrCkbSxNv8mxPcUZKeuoF3Uy4mJl3Lwprp6yy5/39VWigZ4K6Q=="],
+
     "safer-buffer": ["safer-buffer@2.1.2", "", {}, "sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg=="],
 
     "split2": ["split2@4.2.0", "", {}, "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg=="],
 
     "sql-escaper": ["sql-escaper@1.5.2", "", {}, "sha512-6CKD38c31SENivxOADeMNLdukOnUxUcflKtzVWzace7Riv1v7cAEym5Cx9Q7gYZ3ezIJI7ZpqecQq8cqNeSSFg=="],
+
+    "tslib": ["tslib@1.14.1", "", {}, "sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg=="],
+
+    "tsyringe": ["tsyringe@4.10.0", "", { "dependencies": { "tslib": "^1.9.3" } }, "sha512-axr3IdNuVIxnaK5XGEUFTu3YmAQ6lllgrvqfEoR16g/HGnYY/6We4oWENtAnzK6/LpJ2ur9PAb80RBt7/U4ugw=="],
 
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
