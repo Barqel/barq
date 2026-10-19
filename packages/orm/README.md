@@ -860,7 +860,8 @@ without a database.
 contracts and per-dialect SQL assertions. `tests/node/smoke.mjs` exercises the
 built and the packed (`bun pm pack`) package under Node 24 against SQLite,
 MySQL and PostgreSQL — the `node-runtime` job in `.github/workflows/orm.yml`
-runs it on every push. With both live URLs configured the full gate is
+runs it on every push (green in run `39216418150`). With both live URLs
+configured the full gate is
 **328 pass, 0 fail** (1593 assertions across 12 files); without them the same
 command is **262 pass, 2 skip, 0 fail** (264 tests), skipping only the two
 env-gated dialect entry points. Full evidence, methodology and honest

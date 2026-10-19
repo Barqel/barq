@@ -706,9 +706,14 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
 - Podman scratch databases (MySQL 8.4.11, PostgreSQL 16.15): same command →
   **328 pass / 0 fail**.
 - Node runtime smoke (`bun run smoke`, i.e. `node --no-warnings
-  tests/node/smoke.mjs`): built `dist/` and the
-  packed tarball both report `ok sqlite`, `ok mysql`, `ok postgres`,
-  `ok exports` — see §4.7.
+  tests/node/smoke.mjs`): built `dist/` and the packed tarball both report
+  `ok sqlite`, `ok mysql`, `ok postgres`, `ok exports` — see §4.7.
+- Hosted CI: run `39216418150` (`5f9afdf`) — **all three jobs green**:
+  `Types, lint, build, SQLite` (biome, both typechecks, `bun test`, build),
+  `Live MySQL and PostgreSQL` (the full 328-test suite against the workflow's
+  `mysql:8.4` and `postgres:16` service containers) and the new
+  `Node runtime smoke (built + packed)` (Node 24: dist smoke against SQLite +
+  both live engines, `bun pm pack`, packed-tarball install and smoke).
 - Every Priority-4 behaviour is asserted live on all three engines: one-of-many
   tied extremes match exactly one row in predicates and aggregates (both
   directions), `whereAttachedTo` uses the related table's real primary key,
@@ -881,7 +886,9 @@ and the live sequence against local MySQL/PostgreSQL (250 pass / 0 fail).
   `live-dialects` job against the workflow's own MySQL 8.4 and PostgreSQL 16
   service containers (`mysql:8.4` + `postgres:16`). Run `39199331811`
   (`ab9a6c9`) had failed first at `bun install --frozen-lockfile`; the lockfile
-  fix and its local rehearsal are documented in §4.8.
+  fix and its local rehearsal are documented in §4.8. The latest push
+  (`5f9afdf`, run `39216418150`) is green for all three jobs, including the
+  Node runtime smoke.
 - The full suite runs under Bun; the Node runtime is covered by
   `tests/node/smoke.mjs` against the built **and packed** artifact on SQLite,
   MySQL and PostgreSQL (§4.7), wired into the `node-runtime` CI job.
