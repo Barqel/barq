@@ -16,7 +16,6 @@
 		"emitDecoratorMetadata": true,
 		"noUncheckedIndexedAccess": true,
 		"noImplicitOverride": true,
-		"allowImportingTsExtensions": true,
 		"baseUrl": ".",
 		"paths": {
 			"@barqel/barq": ["../../dist/index.d.ts"]

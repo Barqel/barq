@@ -2,15 +2,26 @@
 //
 // A generator renders a stub from this package's `stubs/` directory into
 // the application, and — when a registry key is configured — wires the new
-// class into `barq.config.ts` automatically, so after
-// `bun run cli job:make send-emails` you only write the job logic.
+// class into the app config (`app/config/app.ts`, or a root
+// `barq.config.*`) automatically, so after `bun run cli job:make
+// send-emails` you only write the job logic.
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CommandContext, CommandFlag } from "@barqel/barq-cli";
+import {
+	appConfigFileLabel,
+	findAppConfigFile,
+} from "../config/app-config-file";
 import { PROJECT_ROOT } from "../kernel/paths";
 import { Command } from "./command";
+import {
+	ensureFrameworkAlias,
+	FRAMEWORK_IMPORT,
+	FRAMEWORK_PACKAGE,
+	frameworkImportSpecifier,
+} from "./framework-import";
 
 // Locates `<package>/stubs` from both runtime shapes of this package:
 // - source runs (bin fallback): `src/console/generator.ts` → walk up
@@ -45,18 +56,15 @@ function resolveStubsDir(): string {
 	}
 
 	throw new Error(
-		"Could not locate the `stubs` directory of @barqel/barq-app. " +
-			"Reinstall the package (`bun install @barqel/barq-app`).",
+		`Could not locate the \`stubs\` directory of ${FRAMEWORK_PACKAGE}. ` +
+			`Reinstall the package (\`bun install ${FRAMEWORK_PACKAGE}\`).`,
 	);
 }
 
-/** Array key in `barq.config.ts` that receives the generated class. */
+/** Array key in the app config that receives the generated class. */
 export interface RegistryTarget {
 	key: "jobs" | "listeners" | "commands";
 }
-
-/** Application config file that holds the registries. */
-const CONFIG_FILE = "barq.config.ts";
 
 /** "send-emails" → "SendEmails"; "wallet/transfer" → "WalletTransfer". */
 export function pascalCase(value: string): string {
@@ -170,14 +178,19 @@ export abstract class GeneratorCommand extends Command {
 		const content = renderStub(stub, {
 			className,
 			name: rawName,
+			package: frameworkImportSpecifier(),
+			configFile: appConfigFileLabel(),
 			...this.variables(rawName, className),
 		});
+
+		this.ensureImportAlias(ctx);
 
 		await mkdir(dirname(absolutePath), { recursive: true });
 		await writeFile(absolutePath, content, "utf8");
 		ctx.log.success(`${alreadyExists ? "Updated" : "Created"} ${relativePath}`);
 
 		if (this.registry !== null) {
+			const configLabel = appConfigFileLabel();
 			const registered = await this.addToRegistry(
 				className,
 				toImportSpecifier(relativePath),
@@ -185,11 +198,11 @@ export abstract class GeneratorCommand extends Command {
 
 			if (registered) {
 				ctx.log.info(
-					`Registered ${className} in ${CONFIG_FILE} (${this.registry.key})`,
+					`Registered ${className} in ${configLabel} (${this.registry.key})`,
 				);
 			} else {
 				ctx.log.warn(
-					`Add ${className} to the \`${this.registry.key}\` array in ${CONFIG_FILE} manually`,
+					`Add ${className} to the \`${this.registry.key}\` array in ${configLabel} manually`,
 				);
 			}
 		}
@@ -199,7 +212,28 @@ export abstract class GeneratorCommand extends Command {
 		}
 	}
 
-	/** Appends the import + array entry to `barq.config.ts`. Fail-safe. */
+	/**
+	 * Makes sure the app maps `@barq` to the framework, so the import the
+	 * generated file carries resolves at runtime and in the editor.
+	 */
+	private ensureImportAlias(ctx: CommandContext): void {
+		const alias = ensureFrameworkAlias();
+
+		if (alias.changed) {
+			ctx.log.info(
+				`Mapped "${FRAMEWORK_IMPORT}" to the framework in tsconfig.json`,
+			);
+			return;
+		}
+
+		if (!alias.ok) {
+			ctx.log.warn(
+				`Could not map "${FRAMEWORK_IMPORT}" in tsconfig.json — ${alias.reason}`,
+			);
+		}
+	}
+
+	/** Appends the import + array entry to the app config. Fail-safe. */
 	private async addToRegistry(
 		className: string,
 		importSpecifier: string,
@@ -210,9 +244,9 @@ export abstract class GeneratorCommand extends Command {
 			return false;
 		}
 
-		const configPath = join(PROJECT_ROOT, CONFIG_FILE);
+		const configPath = findAppConfigFile();
 
-		if (!existsSync(configPath)) {
+		if (configPath === null) {
 			return false;
 		}
 

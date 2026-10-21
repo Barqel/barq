@@ -1,0 +1,25 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true,
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"verbatimModuleSyntax": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"baseUrl": ".",
+		"paths": {
+			"@barqel/barq": ["../../dist/index.d.ts"]
+		}
+	},
+	"include": ["src/**/*"]
+}

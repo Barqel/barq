@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { analyzeHandler } from "../src/internal/scan";
 
 type ScanContext = {
@@ -6,11 +8,19 @@ type ScanContext = {
 	json: (value?: object) => unknown;
 };
 
+/** A temporary file inside the platform's temp directory. */
+function tempFile(extension: string): string {
+	return join(
+		tmpdir(),
+		`barq_scan_${Math.random().toString(36).slice(2)}${extension}`,
+	);
+}
+
 async function minifyHandler(
 	fn: (...args: never[]) => unknown,
 ): Promise<(...args: never[]) => unknown> {
 	const source = `export const __fn = ${fn.toString()};`;
-	const tmp = `/tmp/scan_minify_${Math.random().toString(36).slice(2)}.ts`;
+	const tmp = tempFile(".ts");
 	const file = Bun.file(tmp);
 	await Bun.write(file, source);
 	const result = await Bun.build({
@@ -201,7 +211,7 @@ describe("scan.ts minified self-test", () => {
 			throw new Error("minify scan.ts failed");
 		}
 		const code = await result.outputs[0]!.text();
-		const tmp = `/tmp/scan_minified_${Math.random().toString(36).slice(2)}.js`;
+		const tmp = tempFile(".js");
 		await Bun.write(Bun.file(tmp), code);
 		const { analyzeHandler: minAnalyze } = await import(tmp);
 		expect(minAnalyze(() => "ok").literal).toEqual({

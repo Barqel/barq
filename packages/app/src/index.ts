@@ -4,7 +4,8 @@
 // `shutdown`), base classes (`Job`, `Listener`, `Command`, `BaseRequest`),
 // HTTP helpers, exceptions, the `*:make` generators, testing helpers and
 // re-exports of every underlying primitive (HTTP core, plugins, DI,
-// validation). Applications import from this package only.
+// validation). Applications import from this package only — through the
+// `@barq` alias every Barq app maps in its `tsconfig.json`.
 import "reflect-metadata";
 
 // Pull in the module augmentations (app.cron, app.events, app.openapi,
@@ -14,9 +15,37 @@ import "reflect-metadata";
 import type { AugmentMarker } from "./augment";
 
 export type { HandlerDocs } from "@barqel/barq-openapi";
-
+// --- Auto-register --------------------------------------------------------
+export type {
+	AutoRegisterConfig,
+	AutoRegisterKind,
+	AutoRegisterResult,
+	AutoRegisterWarning,
+	AutoRegisterWarningCode,
+	DiscoverOptions,
+} from "./auto-register";
+export {
+	defineConfigAsync,
+	discover,
+	extractCommand,
+	extractJob,
+	extractListener,
+	extractTranslation,
+	importFile,
+	mergeManualAndAuto,
+	resolveDirectory,
+	sanitizeTranslations,
+	scanFiles,
+} from "./auto-register";
 // --- CLI ---------------------------------------------------------------------
 export { loadAppConfig, runCli } from "./cli";
+export type {
+	AppEmailConfig,
+	AppMailTransport,
+	MailEnv,
+	ResolvedEmailConfig,
+} from "./config/email";
+export { DEFAULT_EMAIL, resolveEmail } from "./config/email";
 export {
 	IDEMPOTENCY_HEADER,
 	idempotencyMiddleware,
@@ -88,6 +117,8 @@ export { printBanner } from "./kernel/banner";
 export type { AppEnv, AppEnvName } from "./kernel/env";
 export { ENV, env, isProduction } from "./kernel/env";
 export { PROJECT_ROOT, PUBLIC_DIR } from "./kernel/paths";
+export type { RuntimeInfo } from "./kernel/runtime";
+export { runtimeInfo } from "./kernel/runtime";
 export {
 	BaseRequest,
 	HeadersRequest,
@@ -100,8 +131,42 @@ export {
 	validatedBy,
 } from "./requests/handler";
 export { defineRequest, type RequestSource } from "./requests/request";
+// --- Security (hashing, encryption, password rules) ----------------------------
+export { Crypt, DecryptException, EncryptionKeyError } from "./security/crypt";
+export type { HashDriver, HashOptions } from "./security/hash";
+export {
+	Hash,
+	HashAlgorithmMismatchError,
+	HashConfigurationError,
+	HashRuntimeError,
+	InvalidHashError,
+} from "./security/hash";
+export type { PasswordIssue } from "./security/password";
+export { Password, WeakPasswordError } from "./security/password";
+// --- Strings -------------------------------------------------------------------
+export type {
+	ArabicForms,
+	ArabicGender,
+	ArabicPluralForm,
+	ArabicPluralOptions,
+	ExcerptOptions,
+	MarkdownOptions,
+} from "./strings";
+export {
+	ArabicPlural,
+	ascii,
+	escapeHtml,
+	HtmlString,
+	inlineMarkdown,
+	markdown,
+	Pluralizer,
+	Str,
+	Stringable,
+	str,
+	transliterate,
+	Uri,
+} from "./strings";
 export type { TestAppOptions, TestServer } from "./testing";
-
 // --- Testing -------------------------------------------------------------------
 export { createTestApp } from "./testing";
 // --- Vendor primitives (HTTP core, plugins, DI, validation) --------------------

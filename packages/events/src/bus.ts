@@ -90,10 +90,7 @@ export class EventBus<
 		return this.emitParallel(resolveEventName(event), payload);
 	}
 
-	async emitParallel<P>(
-		event: EventDefinition<P>,
-		payload: P,
-	): Promise<void>;
+	async emitParallel<P>(event: EventDefinition<P>, payload: P): Promise<void>;
 	async emitParallel(event: string, payload?: unknown): Promise<void>;
 	async emitParallel(
 		event: string | EventDefinition,

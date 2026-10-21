@@ -21,7 +21,7 @@
 		"format": "biome format --write .",
 		"lint": "biome lint .",
 		"check": "biome check .",
-		"build": "rm -rf dist && bun build src/index.ts --external @barqel/barq --external @barqel/barq-cli --external @barqel/barq-compress --external @barqel/barq-cron --external @barqel/barq-env --external @barqel/barq-events --external @barqel/barq-helmet --external @barqel/barq-i18n --external @barqel/barq-idempotency --external @barqel/barq-logger --external @barqel/barq-openapi --external @barqel/barq-rate-limit --external @barqel/barq-static --external reflect-metadata --external tsyringe --external zod --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
+		"build": "rm -rf dist && bun build src/index.ts --external @barqel/barq --external @barqel/barq-cli --external @barqel/barq-compress --external @barqel/barq-cron --external @barqel/barq-email --external @barqel/barq-env --external @barqel/barq-events --external @barqel/barq-helmet --external @barqel/barq-i18n --external @barqel/barq-idempotency --external @barqel/barq-logger --external @barqel/barq-openapi --external @barqel/barq-rate-limit --external @barqel/barq-static --external collect.js --external reflect-metadata --external tsyringe --external zod --target=node --format=esm --sourcemap=external --outdir dist && tsc --emitDeclarationOnly --declaration --outDir dist",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "bun run check && bun run typecheck && bun test && bun run build"
@@ -32,7 +32,21 @@
 		"stubs"
 	],
 	"dependencies": {
-
+		"@barqel/barq": "file:../..",
+		"@barqel/barq-cli": "file:../cli",
+		"@barqel/barq-compress": "file:../compress",
+		"@barqel/barq-cron": "file:../cron",
+		"@barqel/barq-email": "file:../email",
+		"@barqel/barq-env": "file:../env",
+		"@barqel/barq-events": "file:../events",
+		"@barqel/barq-helmet": "file:../helmet",
+		"@barqel/barq-i18n": "file:../i18n",
+		"@barqel/barq-idempotency": "file:../idempotency",
+		"@barqel/barq-logger": "file:../logger",
+		"@barqel/barq-openapi": "file:../openapi",
+		"@barqel/barq-rate-limit": "file:../rate-limit",
+		"@barqel/barq-static": "file:../static",
+		"collect.js": "^4.36.1",
 		"reflect-metadata": "^0.2.2",
 		"tsyringe": "^4.10.0",
 		"zod": "^4.6.6"

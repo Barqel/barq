@@ -1,0 +1,15 @@
+# The repository is formatted with LF (Biome enforces it), so the checkout
+# must keep LF too — a Windows checkout with `core.autocrlf=true` would
+# otherwise turn every file into CRLF and the formatter would refuse it.
+* text=auto eol=lf
+
+# The binaries stay binary.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.tgz binary

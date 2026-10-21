@@ -3,7 +3,7 @@
 // Lets any layer (services, repositories, loggers, validators) read the
 // current request's `Context` without threading it through every signature:
 //
-//   import { ctx } from "@barqel/barq-app";
+//   import { ctx } from "@barq";
 //   const t = ctx()?.t;
 //
 // Lifecycle contract (verified against the Barq dispatcher's implementation):

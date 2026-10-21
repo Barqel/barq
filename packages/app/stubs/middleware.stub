@@ -1,4 +1,4 @@
-import { type Context, type Middleware } from "@barqel/barq-app";
+import { type Context, type Middleware } from "{{package}}";
 
 /**
  * `{{name}}` middleware.
@@ -10,7 +10,7 @@ import { type Context, type Middleware } from "@barqel/barq-app";
  * Attach per route (composes like `idempotencyMiddleware`):
  *   users.post("/", {{className}}(), handler);
  *
- * …or app-wide in `barq.config.ts`:
+ * …or app-wide in `{{configFile}}`:
  *   configure: (app) => app.use({{className}}()),
  */
 export function {{className}}(): Middleware {

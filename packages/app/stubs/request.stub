@@ -1,4 +1,4 @@
-import { BaseRequest, injectable, r } from "@barqel/barq-app";
+import { BaseRequest, injectable, r } from "{{package}}";
 
 // Extend BaseRequest for JSON bodies — or ParamsRequest / QueryRequest /
 // HeadersRequest to validate that part of the request with the same engine.

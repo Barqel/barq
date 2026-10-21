@@ -1,4 +1,4 @@
-import { injectable, Listener, type PayloadOf } from "@barqel/barq-app";
+import { injectable, Listener, type PayloadOf } from "{{package}}";
 
 @injectable()
 export class {{className}} extends Listener.of<Record<string, unknown>>(

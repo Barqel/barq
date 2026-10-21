@@ -1,6 +1,6 @@
 {
 	"name": "@barqel/barq-events",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Zero-dependency, typed asynchronous event bus and dispatcher for Barq",
 	"type": "module",
 	"main": "./dist/index.js",

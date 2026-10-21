@@ -22,10 +22,14 @@ function commandUrl(file: string): string {
 
 const createdDirs: string[] = [];
 
-async function createProject(): Promise<string> {
+async function createProject(tsconfig?: string): Promise<string> {
 	const dir = await mkdtemp(join(tmpdir(), "barq-generator-"));
 	createdDirs.push(dir);
 	await Bun.write(join(dir, "package.json"), "{}\n");
+
+	if (tsconfig !== undefined) {
+		await Bun.write(join(dir, "tsconfig.json"), tsconfig);
+	}
 
 	return dir;
 }
@@ -140,7 +144,7 @@ describe("middleware:make", () => {
 			"utf8",
 		);
 
-		expect(file).toContain('from "@barqel/barq-app"');
+		expect(file).toContain('from "@barq"');
 		expect(file).toContain(
 			"export function authGuardMiddleware(): Middleware {",
 		);
@@ -222,7 +226,7 @@ describe("listener:make", () => {
 		);
 
 		expect(file).toContain(
-			'import { injectable, Listener, type PayloadOf } from "@barqel/barq-app";',
+			'import { injectable, Listener, type PayloadOf } from "@barq";',
 		);
 		expect(file).toContain(
 			"class UserActivatedListener extends Listener.of<Record<string, unknown>>(",
@@ -256,7 +260,7 @@ describe("action:make", () => {
 			"utf8",
 		);
 
-		expect(file).toContain('import { injectable } from "@barqel/barq-app";');
+		expect(file).toContain('import { injectable } from "@barq";');
 		expect(file).toContain("export class GenerateOtpAction {");
 		expect(file).toContain("async handle(): Promise<void>");
 	});
@@ -305,5 +309,125 @@ describe("dto:make", () => {
 		expect(file).toContain("export interface OtpDto {");
 		expect(file).toContain("TODO: list the fields");
 		expect(file).toContain("id: string;");
+	});
+});
+
+describe("framework alias", () => {
+	it("maps @barq in the tsconfig when the project has none", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			ACTION_COMMAND,
+			"MakeActionCommand",
+			{ name: "generate-otp" },
+		);
+
+		expect(exitCode).toBe(0);
+		expect(logs.join("\n")).toContain('Mapped "@barq"');
+
+		const tsconfig = await readFile(join(project, "tsconfig.json"), "utf8");
+
+		expect(tsconfig).toContain('"@barq"');
+		expect(tsconfig).toContain("./node_modules/@barqel/barq-app");
+	});
+
+	it("keeps the existing paths and adds the alias", async () => {
+		const project = await createProject(
+			`{
+	"compilerOptions": {
+		// app internals
+		"paths": {
+			"@/*": ["./app/*"]
+		}
+	}
+}
+`,
+		);
+
+		runGenerator(project, ACTION_COMMAND, "MakeActionCommand", {
+			name: "generate-otp",
+		});
+
+		const tsconfig = await readFile(join(project, "tsconfig.json"), "utf8");
+
+		expect(tsconfig).toContain('"@/*"');
+		expect(tsconfig).toContain('"@barq"');
+		// Comments survive the edit.
+		expect(tsconfig).toContain("// app internals");
+	});
+
+	it("never rewrites an existing alias", async () => {
+		const project = await createProject(
+			`{
+	"compilerOptions": {
+		"paths": {
+			"@barq": ["./node_modules/@barqel/barq-app"]
+		}
+	}
+}
+`,
+		);
+
+		const { logs } = runGenerator(
+			project,
+			ACTION_COMMAND,
+			"MakeActionCommand",
+			{ name: "generate-otp" },
+		);
+
+		expect(logs.join("\n")).not.toContain('Mapped "@barq"');
+
+		const tsconfig = await readFile(join(project, "tsconfig.json"), "utf8");
+
+		expect(tsconfig.split('"@barq"').length - 1).toBe(1);
+		expect(tsconfig.split("./node_modules/@barqel/barq-app").length - 1).toBe(
+			1,
+		);
+	});
+
+	it("adds the paths mapping when the tsconfig has none", async () => {
+		const project = await createProject(
+			`{
+	"compilerOptions": {
+		"strict": true
+	}
+}
+`,
+		);
+
+		runGenerator(project, ACTION_COMMAND, "MakeActionCommand", {
+			name: "generate-otp",
+		});
+
+		const tsconfig = await readFile(join(project, "tsconfig.json"), "utf8");
+
+		expect(tsconfig).toContain('"strict": true');
+		expect(tsconfig).toContain('"paths"');
+		expect(tsconfig).toContain('"@barq"');
+	});
+
+	it("warns instead of breaking a tsconfig that extends another", async () => {
+		const project = await createProject(
+			`{
+	"extends": "./tsconfig.base.json"
+}
+`,
+		);
+
+		const { logs } = runGenerator(
+			project,
+			ACTION_COMMAND,
+			"MakeActionCommand",
+			{ name: "generate-otp" },
+		);
+
+		const output = logs.join("\n");
+
+		expect(output).toContain('Could not map "@barq"');
+		expect(output).not.toContain('Mapped "@barq"');
+
+		const tsconfig = await readFile(join(project, "tsconfig.json"), "utf8");
+
+		expect(tsconfig).not.toContain('"@barq"');
 	});
 });

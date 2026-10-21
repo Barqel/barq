@@ -39,6 +39,40 @@ export const env = createEnv({
 	IDEMPOTENCY_TTL_MS: rules.number({ default: 86_400_000 }),
 
 	IDEMPOTENCY_ENFORCE_HEADER: rules.boolean({ default: true }),
+
+	// --- Mail (the email plugin) --------------------------------------------
+	// The transport is picked automatically: a host means real SMTP
+	// delivery, no host means the messages are logged, not sent.
+	MAIL_TRANSPORT: rules.enum(
+		["auto", "smtp", "log", "json", "stream", "sendmail"] as const,
+		{ default: "auto" },
+	),
+
+	MAIL_HOST: rules.string({ default: "" }),
+
+	MAIL_PORT: rules.port({ default: 587 }),
+
+	MAIL_SECURE: rules.boolean({ default: false }),
+
+	MAIL_USER: rules.string({ default: "" }),
+
+	MAIL_PASSWORD: rules.string({ default: "" }),
+
+	MAIL_FROM: rules.string({ default: "barq@example.com" }),
+
+	MAIL_FROM_NAME: rules.string({ default: "Barq" }),
+
+	MAIL_REPLY_TO: rules.string({ default: "" }),
+
+	MAIL_SUBJECT_PREFIX: rules.string({ default: "" }),
+
+	MAIL_RETRIES: rules.number({ default: 2 }),
+
+	MAIL_RETRY_DELAY: rules.number({ default: 500 }),
+
+	MAIL_POOL: rules.boolean({ default: false }),
+
+	MAIL_TIMEOUT: rules.number({ default: 10_000 }),
 });
 
 export type AppEnv = typeof env;

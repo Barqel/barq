@@ -1,4 +1,4 @@
-import { json, singleton, type Context } from "@barqel/barq-app";
+import { json, singleton, type Context } from "{{package}}";
 // import { XService } from "@/services/x";
 
 @singleton()

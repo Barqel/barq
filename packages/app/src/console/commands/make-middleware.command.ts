@@ -1,3 +1,4 @@
+import { appConfigFileLabel } from "../../config/app-config-file";
 import { camelCase, GeneratorCommand, kebabCase } from "../generator";
 
 export class MakeMiddlewareCommand extends GeneratorCommand {
@@ -22,7 +23,7 @@ export class MakeMiddlewareCommand extends GeneratorCommand {
 	): string[] {
 		return [
 			`Attach it per route: users.post("/", ${className}(), handler)`,
-			`Or app-wide in barq.config.ts — configure: (app) => app.use(${className}())`,
+			`Or app-wide in ${appConfigFileLabel()} — configure: (app) => app.use(${className}())`,
 		];
 	}
 }

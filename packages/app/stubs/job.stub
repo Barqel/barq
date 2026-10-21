@@ -1,4 +1,4 @@
-import { Cron, injectable, Job } from "@barqel/barq-app";
+import { Cron, injectable, Job } from "{{package}}";
 
 @injectable()
 export class {{className}} extends Job {

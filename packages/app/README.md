@@ -14,17 +14,35 @@ static), DI (tsyringe) and validation (zod).
 bun add @barqel/barq-app
 ```
 
+## Import it as `@barq`
+
+Applications import the framework through the short `@barq` alias. Map it
+once in the app `tsconfig.json` — Bun reads tsconfig paths at runtime, so
+the alias works in the editor, in `bun run` and in the `barq` CLI:
+
+```jsonc
+{
+	"compilerOptions": {
+		"paths": {
+			"@barq": ["./node_modules/@barqel/barq-app"]
+		}
+	}
+}
+```
+
+The `*:make` generators create the mapping for you when it is missing.
+
 ## The shape of an app
 
 ```
-barq.config.ts     # routes + registries (jobs / listeners / commands) + overrides
-index.ts           # entrypoint: start(config)
-app/               # business logic only
+app/config/app.ts  # routes + registries (jobs / listeners / commands) + overrides
+index.ts            # entrypoint: start(config)
+app/                # business logic only
 ```
 
 ```ts
-// barq.config.ts
-import { defineConfig } from "@barqel/barq-app";
+// app/config/app.ts
+import { defineConfig } from "@barq";
 
 export default defineConfig({
 	routes: (app) => app.get("/", () => json({ hello: "world" })),
@@ -33,11 +51,127 @@ export default defineConfig({
 
 ```ts
 // index.ts
-import { start } from "@barqel/barq-app";
-import config from "./barq.config";
+import { start } from "@barq";
+import config from "./app/config/app";
 
 start(config);
 ```
+
+## Passwords & encryption
+
+Two services, both static — no `new` needed:
+
+```ts
+import { Crypt, Hash, Password } from "@barq";
+
+// Hashing — one way, by design.
+const hashed = await Hash.make("Hassan");
+await Hash.check("Hassan", hashed); // → true
+Hash.needsRehash(hashed); // → false (the work factor changed → re-hash it)
+
+// Encryption — reversible, for secrets (API keys, tokens).
+const payload = Crypt.encryptString("sk_live_123");
+Crypt.decryptString(payload); // → "sk_live_123"
+
+// Rules — Laravel's `Password::min(8)->mixedCase()->numbers()`.
+const rule = Password.of().min(8).mixedCase().numbers();
+rule.validate("Passw0rd"); // → true
+rule.assert("weak"); // → throws WeakPasswordError
+```
+
+| Service | Driver | Notes |
+| --- | --- | --- |
+| `Hash` | `scrypt` (default), `bcrypt`, `argon2id` | The driver comes from `HASH_DRIVER`. scrypt lives in `node:crypto`, so a hash made on Bun verifies on Node.js too; bcrypt and argon2id go through `Bun.password` (Bun only). `HASH_VERIFY=false` accepts hashes made with another algorithm (migrations). |
+| `Crypt` | AES-256-CBC + HMAC-SHA256 | The key comes from `APP_KEY` (base64, 32 bytes) and `APP_PREVIOUS_KEYS` holds the retired keys — decryption falls back to them, so rotating the key never breaks what is already stored. Generate one with `bun run cli key:generate`. |
+
+## Strings
+
+Laravel's `Str` helper, complete, with no dependency — plus the fluent
+`Stringable` counterpart:
+
+```ts
+import { Str, str } from "@barq";
+
+Str.after("This is my name", "This is"); // → " my name"
+Str.camel("foo_bar"); // → "fooBar"
+Str.slug("Laravel 5 Framework"); // → "laravel-5-framework"
+Str.matchAll("/bar/", "bar foo bar").all(); // → ["bar", "bar"]
+Str.plural("child"); // → "children"
+Str.isUuid(Str.uuid7(), 7); // → true
+
+str("foo_bar").camel().upper().toString(); // → "FOOBAR"
+str("tony stark").whenContains("tony", (value) => value.title()).toString(); // → "Tony Stark"
+```
+
+Slicing, searching, replacing, trimming, case conversions, padding, masking,
+truncating, pluralization, Markdown rendering, URL/UUID/ULID helpers — the
+whole surface, with Laravel's names and behaviour.
+
+### Arabic plurals
+
+Arabic counts the noun, not just the number — the framework implements the six
+counted forms (CLDR's Arabic cardinal rules) and picks them automatically:
+
+```ts
+import { ArabicPlural, Str } from "@barq";
+
+Str.counted("مستخدم", 0); // → "0 مستخدم"
+Str.counted("مستخدم", 1); // → "1 مستخدم"
+Str.counted("مستخدم", 2); // → "2 مستخدمان"   (the dual)
+Str.counted("مستخدم", 3); // → "3 مستخدمين"   (the broken plural)
+Str.counted("مستخدم", 11); // → "11 مستخدمًا"  (the accusative singular)
+Str.counted("مستخدم", 100); // → "100 مستخدم"
+
+Str.counted("معلمة", 2); // → "2 معلمتان"     (feminine — inferred from "ة")
+Str.counted("معلمة", 3); // → "3 معلمات"
+
+ArabicPlural.form(3); // → "few"
+ArabicPlural.forms("مستخدم"); // → { zero, one, two, few, many, other }
+```
+
+Keep the noun in the locale file and let the framework pluralize it in the
+request language — `"label": "مستخدم"` / `"label": "user"`.
+
+## Email
+
+The kernel wires the mailer at boot — `app.mail`, the process-wide
+`mailer()` and the DI container all point at the same instance:
+
+```ts
+import { mailer } from "@barq";
+
+await mailer().send({
+  to: "user@example.com",
+  template: {
+    subject: "Welcome {{ name }}",
+    html: "<p>Hello {{ name }}, welcome aboard.</p>",
+  },
+  data: { name: "Hassan" },
+});
+```
+
+The transport is picked automatically: a configured `MAIL_HOST` means real
+SMTP delivery, no host means the message is printed in the terminal instead
+of being sent — so a development environment never needs a mail server.
+`MAIL_TRANSPORT` picks it by hand (`smtp`, `log`, `json`, `stream`,
+`sendmail`).
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `MAIL_TRANSPORT` | `auto` | `auto` \| `smtp` \| `log` \| `json` \| `stream` \| `sendmail` |
+| `MAIL_HOST` | – | The SMTP host — a host switches `auto` to `smtp` |
+| `MAIL_PORT` | `587` | The SMTP port |
+| `MAIL_SECURE` | `false` | TLS from the first byte |
+| `MAIL_USER` / `MAIL_PASSWORD` | – | The SMTP credentials |
+| `MAIL_FROM` | `barq@example.com` | The sender address |
+| `MAIL_FROM_NAME` | `Barq` | The sender name |
+| `MAIL_REPLY_TO` | – | Where the replies go |
+| `MAIL_SUBJECT_PREFIX` | – | A prefix added to every subject |
+| `MAIL_RETRIES` | `2` | How many times a failed send is retried |
+| `MAIL_RETRY_DELAY` | `500` | The delay before the first retry, in ms |
+
+A failed delivery is retried with a growing delay and then throws a
+`MailDeliveryError` carrying the attempt count and the original error.
 
 ## What's included
 
@@ -51,15 +185,18 @@ start(config);
 | Exceptions | `AppException` family, `ValidationException` |
 | Middleware | `strictRateLimiter`, `globalRateLimiter`, `idempotencyMiddleware` (localized header + replay), `requireIdempotencyKey` |
 | Authored env | `env` (validated), `envRules` + `createEnv` (app-specific vars) |
-| CLI | `barq` bin (`*:make`, `env:check`, `app:info`), `runCli`, `loadAppConfig` |
+| CLI | `barq` bin (`*:make`, `key:generate`, `env:check`, `app:info`), `runCli`, `loadAppConfig` |
 | Generators | `GeneratorCommand`, `pascalCase`, `kebabCase`, `camelCase` |
+| Security | `Hash`, `Crypt`, `Password` + their errors |
+| Strings | `Str`, `Stringable`, `str`, `Pluralizer`, `ArabicPlural`, `Uri`, `HtmlString`, `markdown`, `transliterate` |
+| Email | `Mailer`, `mailer()`, `emailPlugin`, `renderTemplate` + the mail errors |
 | Testing | `createTestApp` |
 | Vendor | `App`, `Context`, `json`, plugins, `r`/`z`, `container`, `singleton`, … |
 
 ## Conventions
 
-- **Config** lives in `barq.config.ts` at the app root; the `barq` CLI loads
-  it with `loadAppConfig()`.
+- **Config** lives in `app/config/app.ts` (a root `barq.config.*` still
+  works); the `barq` CLI loads it with `loadAppConfig()`.
 - **Registries** are explicit arrays (`jobs`, `listeners`, `commands`) so the
   production bundle stays self-contained — `*:make` generators append to
   them automatically.
@@ -84,6 +221,37 @@ start(config);
   `RATE_LIMIT_*`, `IDEMPOTENCY_*`); validate extra ones with `createEnv` +
   `envRules`.
 
+## Auto-Register System
+
+Barq supports automatic component discovery for `jobs`, `listeners`, `commands`, and `translations` via top-level await and `defineConfigAsync`.
+
+### Usage
+
+In `app/config/app.ts`:
+
+```ts
+import { defineConfigAsync } from "@barq";
+
+export default await defineConfigAsync({
+	name: "My App",
+	autoRegister: {
+		jobs: true,          // scans app/jobs
+		listeners: true,     // scans app/listeners
+		commands: true,      // scans app/commands
+		translations: true,  // scans app/locales
+	},
+});
+```
+
+### Key Guarantees
+- **Zero API Breakage**: `createApp()`, `start()`, and `createTestApp()` remain 100% synchronous.
+- **Zero Request-Path Overhead**: Scanning and importing occurs only once at configuration evaluation time (TLA).
+- **Manual Priority Always Wins**: Any manual items in `jobs`, `listeners`, `commands`, or `translations` take precedence over discovered items and are deduplicated.
+- **Security & Path Confinement**: Discovered paths are strictly validated using canonical `realpath` checks within `PROJECT_ROOT`. Traversal and symlinks outside the root are rejected.
+- **Prototype Pollution Defense**: Translation keys (`__proto__`, `constructor`, `prototype`) are rejected.
+- **Error Isolation**: Individual file import or syntax errors log non-fatal warnings by default without crashing boot (unless `strict: true`).
+
+
 ## Scripts
 
 ```bash
@@ -91,5 +259,20 @@ bun run build       # dist/index.js + dist/*.d.ts
 bun run typecheck
 bun test
 ```
+
+## Publishing
+
+The sibling packages are linked with `file:` paths (`file:../cron`,
+`file:../email`, …) so the monorepo always runs the local sources — a
+change in a plugin is picked up without publishing anything. The publish
+script swaps the links for the published versions, publishes, and puts the
+links back:
+
+```bash
+bun run publish:package app --dry-run   # from the repository root
+bun run publish:package app
+```
+
+See [PUBLISHING.md](../../PUBLISHING.md) for the whole flow.
 
 MIT

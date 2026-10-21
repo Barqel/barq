@@ -2,7 +2,7 @@
 // handling and localization as production) on an ephemeral port with
 // scheduled jobs off.
 //
-//   import { createTestApp } from "@barqel/barq-app";
+//   import { createTestApp } from "@barq";
 //   import config from "../barq.config";
 //
 //   const server = createTestApp(config);

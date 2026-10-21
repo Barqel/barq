@@ -1,11 +1,12 @@
 // Vendor barrel — the single import point for every primitive the
 // application needs: HTTP core, plugins, DI, validation and shared helpers.
 //
-// Application code imports from "@barqel/barq-app", never directly from
+// Application code imports from "@barq", never directly from
 // `@barqel/*`, `tsyringe` or `zod`. Upgrades (and even swaps — e.g. a DI or
 // validation library change) stay confined to this package.
 
 import type { RouteGroup } from "@barqel/barq";
+import collectJs, { type Collection } from "collect.js";
 import { container, type InjectionToken } from "tsyringe";
 import type { z } from "zod";
 import arZodLocale from "zod/v4/locales/ar.js";
@@ -59,6 +60,32 @@ export {
 	parseCronExpression,
 } from "@barqel/barq-cron";
 export type {
+	MailAddress,
+	MailAttachment,
+	MailAuth,
+	MailMessage,
+	MailOptions,
+	MailSendResult,
+	MailTemplate,
+	MailTlsOptions,
+	MailTransport,
+} from "@barqel/barq-email";
+export {
+	createMailer,
+	emailPlugin,
+	flattenAddresses,
+	hasMailer,
+	MailConfigurationError,
+	MailDeliveryError,
+	Mailer,
+	MailTemplateError,
+	MailValidationError,
+	mailer,
+	renderTemplate,
+	renderTemplateMessage,
+	setMailer,
+} from "@barqel/barq-email";
+export type {
 	CreateEnvOptions,
 	EnvSchema,
 	InferEnv,
@@ -67,7 +94,7 @@ export type {
 // The framework's validated instance is exported as `env`; `envRules`
 // builds schemas for application-specific variables:
 //
-//   import { createEnv, envRules } from "@barqel/barq-app";
+//   import { createEnv, envRules } from "@barq";
 //   export const appEnv = createEnv({ DATABASE_URL: envRules.string() });
 export { createEnv, env as envRules } from "@barqel/barq-env";
 export type {
@@ -130,6 +157,16 @@ export {
 export type { ZodIssue, ZodRawShape, ZodType } from "zod";
 // --- Validation (zod v4, exposed as `r`) ---
 export { z, z as r } from "zod";
+
+// --- Collections (collect.js) --------------------------------------------------
+// Laravel-style pipelines over arrays and objects:
+//   collect(users).filter((user) => user.role === "admin").count()
+// `slice(offset, length)` takes a length (not an end index) and chains end
+// with `all()` / `count()`.
+export type { Collection };
+export function collect<T>(items?: T[] | Record<string, T>): Collection<T> {
+	return collectJs<T>(items);
+}
 
 // Zod built-in locale error maps, built once. The request validator picks
 // one per request from `ctx.state.locale` (set by the i18n middleware),
@@ -207,3 +244,13 @@ export type Route = RouteGroup<"", Record<string, unknown>>;
 //   RequestData<CreateUserRequest> => { name: string; ... }
 export type RequestData<T extends { rules: (...args: never[]) => Rules }> =
 	z.output<z.ZodObject<ReturnType<T["rules"]>>>;
+
+export type {
+	AutoRegisterConfig,
+	AutoRegisterKind,
+	AutoRegisterResult,
+	AutoRegisterWarning,
+	AutoRegisterWarningCode,
+} from "./auto-register";
+// --- Auto-register ---
+export { defineConfigAsync } from "./auto-register";

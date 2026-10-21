@@ -1,38 +1,32 @@
 // Console support: `runCli()` (used by the `barq` bin) and the app-config
 // loader. Everything is class-based — built-in commands ship with the
-// framework, application commands come from `barq.config.ts`.
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+// framework, application commands come from the app config
+// (`app/config/app.ts` or a root `barq.config.*`).
 import { pathToFileURL } from "node:url";
 import { createCli } from "@barqel/barq-cli";
+import { Mailer, setMailer } from "@barqel/barq-email";
+import { findAppConfigFile } from "./config/app-config-file";
+import { resolveEmail } from "./config/email";
 import { resolveOpenApi } from "./config/openapi";
 import { registerCommands } from "./console/command";
 import { builtinCommands } from "./console/commands";
 import type { BarqConfig } from "./kernel/app";
 import { env } from "./kernel/env";
-import { PROJECT_ROOT } from "./kernel/paths";
 import { setRuntimeInfo } from "./kernel/runtime";
 
-const CONFIG_FILES = ["barq.config.ts", "barq.config.js", "barq.config.mjs"];
-
 /**
- * Loads `barq.config.ts` from the application root (Bun imports TypeScript
- * directly). Returns `{}` when the app has no config file — every setting
- * has a default.
+ * Loads the application declaration (Bun imports TypeScript directly).
+ * Returns `{}` when the app has no config file — every setting has a default.
  */
 export async function loadAppConfig(): Promise<BarqConfig> {
-	for (const file of CONFIG_FILES) {
-		const path = join(PROJECT_ROOT, file);
+	const path = findAppConfigFile();
 
-		if (!existsSync(path)) {
-			continue;
-		}
-
-		const module = await import(pathToFileURL(path).href);
-		return (module.default ?? {}) as BarqConfig;
+	if (path === null) {
+		return {};
 	}
 
-	return {};
+	const module = await import(pathToFileURL(path).href);
+	return (module.default ?? {}) as BarqConfig;
 }
 
 /** Registers built-in + application commands and runs the CLI. */
@@ -48,13 +42,22 @@ export async function runCli(config: BarqConfig = {}): Promise<void> {
 		specPath: openapiConfig.specPath,
 	});
 
+	// The CLI runs without the HTTP app, but the mailer belongs to the
+	// configuration — register it so the commands can send mails.
+	setMailer(new Mailer(resolveEmail(config.email, env)));
+
 	const cli = createCli({
 		name,
 		version: openapiConfig.version,
 		description: "Application console commands",
 	});
 
-	registerCommands(cli, [...builtinCommands, ...(config.commands ?? [])]);
+	const rawCommands = config.commands;
+	const resolvedCommands = Array.isArray(rawCommands)
+		? rawCommands
+		: (rawCommands?.items ?? []);
+
+	registerCommands(cli, [...builtinCommands, ...resolvedCommands]);
 
 	await cli.run();
 }

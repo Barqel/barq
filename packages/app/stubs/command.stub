@@ -1,4 +1,4 @@
-import { Command, type CommandContext } from "@barqel/barq-app";
+import { Command, type CommandContext } from "{{package}}";
 
 export class {{className}} extends Command {
 	readonly signature = "{{signature}}";

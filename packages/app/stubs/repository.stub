@@ -1,4 +1,4 @@
-import { injectable } from "@barqel/barq-app";
+import { injectable } from "{{package}}";
 
 export interface XRecord {
 	id: string;

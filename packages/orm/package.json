@@ -1,0 +1,99 @@
+{
+	"name": "@barqel/barq-orm",
+	"version": "1.0.0",
+	"description": "Typed, Laravel-inspired ORM for Bun and Node.js — Eloquent-style models, composable query builder, relations, migrations and transactions on top of Kysely",
+	"type": "module",
+	"module": "src/index.ts",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./sqlite": {
+			"types": "./dist/sqlite.d.ts",
+			"import": "./dist/sqlite.js"
+		},
+		"./mysql": {
+			"types": "./dist/mysql.d.ts",
+			"import": "./dist/mysql.js"
+		},
+		"./postgres": {
+			"types": "./dist/postgres.d.ts",
+			"import": "./dist/postgres.js"
+		},
+		"./testing": {
+			"types": "./dist/testing.d.ts",
+			"import": "./dist/testing.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check .",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"typecheck:tests": "tsc -p tsconfig.test.json",
+		"build": "rm -rf dist && bun build src/index.ts src/sqlite.ts src/mysql.ts src/postgres.ts src/testing.ts --external kysely --external mysql2 --external pg --target=node --format=esm --sourcemap=external --outdir dist && tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist",
+		"test": "bun test",
+		"smoke": "node --no-warnings tests/node/smoke.mjs",
+		"bench": "bun run benchmarks/run.ts",
+		"prepublishOnly": "bun run check && bun run typecheck && bun test && bun run build"
+	},
+	"files": [
+		"dist",
+		"LICENSE"
+	],
+	"keywords": [
+		"orm",
+		"query-builder",
+		"bun",
+		"node",
+		"mysql",
+		"postgresql",
+		"sqlite",
+		"migrations",
+		"relations",
+		"typescript"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Barqel/barq.git",
+		"directory": "packages/orm"
+	},
+	"homepage": "https://github.com/Barqel/barq/tree/main/packages/orm#readme",
+	"bugs": {
+		"url": "https://github.com/Barqel/barq/issues"
+	},
+	"dependencies": {
+		"collect.js": "^4.36.1",
+		"kysely": "^0.29.7"
+	},
+	"peerDependencies": {
+		"mysql2": ">=3.0.0",
+		"pg": ">=8.0.0"
+	},
+	"peerDependenciesMeta": {
+		"mysql2": {
+			"optional": true
+		},
+		"pg": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.15",
+		"@types/bun": "^1.2.0",
+		"@types/node": "^24",
+		"drizzle-orm": "^0.45.4",
+		"mysql2": "^3.24.6",
+		"pg": "^8.23.1",
+		"typescript": "^5"
+	}
+}

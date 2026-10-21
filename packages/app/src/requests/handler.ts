@@ -102,6 +102,83 @@ export function validatedBy<TRequest extends RequestConstructor>(
  * responses, …); the request schema itself is derived from the request class
  * and registered with the docs registry automatically.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ControllerConstructor<T = object> = new (...args: any[]) => T;
+
+export type ControllerMethodNames<T> = {
+	[K in keyof T]: T[K] extends (...args: never[]) => unknown ? K : never;
+}[keyof T] &
+	string;
+
+export type ControllerActionTuple<
+	T = object,
+	M extends ControllerMethodNames<T> = ControllerMethodNames<T>,
+> = [target: ControllerConstructor<T>, method: M];
+
+// Cache resolved controller instances per constructor
+const controllerInstanceCache = new Map<
+	ControllerConstructor<unknown>,
+	unknown
+>();
+
+function resolveControllerInstance<T extends object>(
+	Target: ControllerConstructor<T>,
+): T {
+	let instance = controllerInstanceCache.get(
+		Target as ControllerConstructor<unknown>,
+	);
+	if (!instance) {
+		instance = controller(
+			Target as unknown as import("tsyringe").InjectionToken<T>,
+		);
+		controllerInstanceCache.set(
+			Target as ControllerConstructor<unknown>,
+			instance,
+		);
+	}
+	return instance as T;
+}
+
+function resolveRunFunction(
+	target: unknown,
+): (ctx: Context, data: unknown) => HandlerResult | Promise<HandlerResult> {
+	if (
+		Array.isArray(target) &&
+		target.length === 2 &&
+		typeof target[0] === "function"
+	) {
+		const [ControllerClass, methodName] = target as [
+			ControllerConstructor<Record<string, (...args: unknown[]) => unknown>>,
+			string,
+		];
+		const instance = resolveControllerInstance(ControllerClass);
+		const method = instance[methodName];
+		if (typeof method !== "function") {
+			throw new Error(
+				`Method "${methodName}" not found on controller "${ControllerClass.name}".`,
+			);
+		}
+		const bound = method.bind(instance);
+		// Also inherit any @validatedBy stamp from original prototype method
+		const originalMethod = ControllerClass.prototype?.[methodName];
+		if (originalMethod) {
+			const req = readRequestClass(originalMethod);
+			if (req) {
+				attachRequestClass(bound, req);
+			}
+		}
+		return bound as (
+			ctx: Context,
+			data: unknown,
+		) => HandlerResult | Promise<HandlerResult>;
+	}
+
+	return target as (
+		ctx: Context,
+		data: unknown,
+	) => HandlerResult | Promise<HandlerResult>;
+}
+
 export function action<
 	TRequest extends RequestConstructor,
 	TResult extends HandlerResult,
@@ -113,6 +190,28 @@ export function action<
 		ctx: Context<TParams, TState>,
 		data: RequestData<InstanceType<TRequest>>,
 	) => TResult | Promise<TResult>,
+	docs?: HandlerDocs,
+): Handler<TParams, TState>;
+
+export function action<
+	TRequest extends RequestConstructor,
+	TController extends object,
+	TMethod extends ControllerMethodNames<TController>,
+	TParams extends object = Params,
+	TState extends object = Record<string, unknown>,
+>(
+	Request: TRequest,
+	target: [target: ControllerConstructor<TController>, method: TMethod],
+	docs?: HandlerDocs,
+): Handler<TParams, TState>;
+
+export function action<
+	TController extends object,
+	TMethod extends ControllerMethodNames<TController>,
+	TParams extends object = Params,
+	TState extends object = Record<string, unknown>,
+>(
+	target: [target: ControllerConstructor<TController>, method: TMethod],
 	docs?: HandlerDocs,
 ): Handler<TParams, TState>;
 
@@ -132,42 +231,46 @@ export function action<
 export function action(
 	first:
 		| RequestConstructor
+		| [ControllerConstructor<object>, string]
 		| ((ctx: Context, data: never) => HandlerResult | Promise<HandlerResult>),
 	second?:
+		| [ControllerConstructor<object>, string]
 		| ((ctx: Context, data: never) => HandlerResult | Promise<HandlerResult>)
 		| HandlerDocs,
 	third?: HandlerDocs,
 ): Handler {
 	// A request class is the only first argument with `BaseRequest` in its
-	// prototype chain — anything else is the run function itself.
+	// prototype chain — anything else is the run function (or tuple) itself.
 	const explicit =
 		typeof first === "function" && first.prototype instanceof BaseRequest;
 
-	const Request = (explicit ? first : readRequestClass(first)) as
+	const runCandidate = resolveRunFunction(explicit ? second : first);
+
+	const Request = (explicit ? first : readRequestClass(runCandidate)) as
 		| RequestConstructor
 		| undefined;
 
 	if (!Request) {
-		if (typeof first !== "function") {
+		if (typeof runCandidate !== "function") {
 			throw new Error(
-				"action(...) expects a request class or a route run function.",
+				"action(...) expects a request class or a route run function/controller tuple.",
 			);
 		}
 
-		if ((first as unknown as Record<PropertyKey, unknown>)[ROUTE_META]) {
+		if ((runCandidate as unknown as Record<PropertyKey, unknown>)[ROUTE_META]) {
 			// Already wrapped by `action` — nothing to add.
-			return first as unknown as Handler;
+			return runCandidate as unknown as Handler;
 		}
 
 		// No request class: the route runs without validation — `data` is the
 		// raw `ctx.params` (no rules, no coercion); a `ctx`-only `run` simply
 		// ignores it.
-		const run = first as (
+		const run = runCandidate as (
 			ctx: Context,
 			data: Params,
 		) => HandlerResult | Promise<HandlerResult>;
 
-		const docs = second as HandlerDocs | undefined;
+		const docs = (explicit ? third : second) as HandlerDocs | undefined;
 
 		const bare = ((ctx: Context) => run(ctx, ctx.params)) as Handler;
 
@@ -181,11 +284,7 @@ export function action(
 		return bare;
 	}
 
-	const run = (explicit ? second : first) as (
-		ctx: Context,
-		data: unknown,
-	) => HandlerResult | Promise<HandlerResult>;
-
+	const run = runCandidate;
 	const docs = (explicit ? third : second) as HandlerDocs | undefined;
 
 	// Cast restores the concrete instance type erased by the generic

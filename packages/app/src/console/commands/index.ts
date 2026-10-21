@@ -1,7 +1,9 @@
 // Built-in console commands — always available, in every application.
 import type { CommandClass } from "../command";
 import { AppInfoCommand } from "./app-info.command";
+import { AutoRegisterCommand } from "./auto-register.command";
 import { EnvCheckCommand } from "./env-check.command";
+import { KeyGenerateCommand } from "./key-generate.command";
 import { MakeActionCommand } from "./make-action.command";
 import { MakeCommandCommand } from "./make-command.command";
 import { MakeControllerCommand } from "./make-controller.command";
@@ -15,7 +17,9 @@ import { MakeServiceCommand } from "./make-service.command";
 
 export const builtinCommands: CommandClass[] = [
 	AppInfoCommand,
+	AutoRegisterCommand,
 	EnvCheckCommand,
+	KeyGenerateCommand,
 	MakeActionCommand,
 	MakeCommandCommand,
 	MakeControllerCommand,
