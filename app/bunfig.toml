@@ -1,0 +1,4 @@
+# Bun configuration.
+#
+# The `isolated` linker keeps every dependency in its own place and links
+linker = "isolated"

@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+// Cross-runtime Barq CLI launcher.
+//
+// Runs the CLI with the current binary (Bun or Node.js). The CLI's JS entry
+// installs a TypeScript/tsconfig-paths loader on Node, so both runtimes load
+// the app the same way.
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(fileURLToPath(import.meta.url));
+const cli = join(root, "node_modules/@barqel/barq-app/bin/barq.js");
+
+const result = spawnSync(process.execPath, [cli, ...process.argv.slice(2)], {
+	stdio: "inherit",
+	cwd: root,
+});
+
+if (result.error) {
+	console.error(`barq: could not start the CLI — ${result.error.message}`);
+	process.exit(1);
+}
+
+process.exit(result.status ?? 1);
