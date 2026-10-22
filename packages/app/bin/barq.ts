@@ -1,13 +1,17 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // Console entrypoint of the `barq` CLI (installed as a bin of this package).
 //
-// Loads `barq.config.ts` from the application root, then runs every
-// built-in + application command:
+// Loads the application config (app/config/app.ts, a root barq.config.*, or
+// the package entrypoint), then runs every built-in + application command:
 //
 //   bun run cli job:make send-emails
 //   bun run cli env:check
 //   bun run cli --help
-import { existsSync } from "node:fs";
+//
+// Runs on both Bun and Node.js. On Node.js the `node-loader.js` helper adds
+// the TypeScript + tsconfig-paths support that Bun provides natively.
+import { spawnSync } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -26,6 +30,8 @@ function findProjectRoot(start: string): string | undefined {
 	return undefined;
 }
 
+const currentFile = fileURLToPath(import.meta.url);
+
 // Bun fixes tsconfig resolution (and with it `emitDecoratorMetadata`, which
 // the DI container needs) when the process starts — a later chdir() is too
 // late. When launched from a subdirectory, hand off to a fresh process
@@ -39,8 +45,9 @@ if (
 	projectRoot &&
 	projectRoot !== process.cwd()
 ) {
-	const child = Bun.spawnSync(
-		[process.execPath, import.meta.path, ...process.argv.slice(2)],
+	const child = spawnSync(
+		process.execPath,
+		[currentFile, ...process.argv.slice(2)],
 		{
 			cwd: projectRoot,
 			stdio: ["inherit", "inherit", "inherit"],
@@ -48,18 +55,45 @@ if (
 		},
 	);
 
-	process.exit(child.exitCode ?? 1);
+	process.exit(child.status ?? 1);
 }
 
-const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+/** Registers the TypeScript/tsconfig-paths loader when running on Node.js. */
+async function installNodeLoader(appRoot: string): Promise<void> {
+	const moduleApi = await import("node:module");
+	const loaderUrl = new URL("./node-loader.js", import.meta.url);
+
+	if (typeof moduleApi.registerHooks === "function") {
+		const loader = await import(loaderUrl.href);
+		await loader.initialize({ root: appRoot });
+		moduleApi.registerHooks(loader);
+		return;
+	}
+
+	if (typeof moduleApi.register === "function") {
+		moduleApi.register(loaderUrl, import.meta.url, {
+			data: { root: appRoot },
+		});
+	}
+}
+
+const appRoot = projectRoot ?? process.cwd();
+
+if (typeof Bun === "undefined") {
+	await installNodeLoader(appRoot);
+}
+
+const packageRoot = join(dirname(currentFile), "..");
 
 const built = join(packageRoot, "dist", "index.js");
 const source = join(packageRoot, "src", "index.ts");
 
 // Prefer the built entry; fall back to TypeScript sources when running
-// inside this repository before the first build.
+// inside this repository before the first build. Resolve symlinks so Node
+// finds the package's own dependencies in pnpm/Bun isolated layouts.
+const entry = existsSync(built) ? built : source;
 const framework = (await import(
-	pathToFileURL(existsSync(built) ? built : source).href
+	pathToFileURL(realpathSync(entry)).href
 )) as typeof import("../src/index.ts");
 
 const config = await framework.loadAppConfig();

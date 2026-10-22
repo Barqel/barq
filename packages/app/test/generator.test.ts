@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { afterAll, describe, expect, it } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,9 +12,18 @@ const PACKAGE_DIR = join(import.meta.dir, "..");
 const COMMANDS_DIR = join(PACKAGE_DIR, "src/console/commands");
 
 const ACTION_COMMAND = "make-action.command.ts";
+const CONFIG_COMMAND = "make-config.command.ts";
+const CONTROLLER_COMMAND = "make-controller.command.ts";
 const DTO_COMMAND = "make-dto.command.ts";
+const ENV_COMMAND = "make-env.command.ts";
+const JOB_COMMAND = "make-job.command.ts";
 const MIDDLEWARE_COMMAND = "make-middleware.command.ts";
 const LISTENER_COMMAND = "make-listener.command.ts";
+const LOCALE_COMMAND = "make-locale.command.ts";
+const MAIL_COMMAND = "make-mail.command.ts";
+const MODULE_COMMAND = "make-module.command.ts";
+const REQUEST_COMMAND = "make-request.command.ts";
+const ROUTE_COMMAND = "make-route.command.ts";
 
 /** Absolute file URL of a command module inside this package. */
 function commandUrl(file: string): string {
@@ -97,16 +107,22 @@ describe("generators", () => {
 
 		expect(signatures).toEqual(
 			expect.arrayContaining([
-				"action:make <name>",
-				"command:make <name>",
-				"controller:make <name>",
-				"dto:make <name>",
-				"job:make <name>",
-				"listener:make <event>",
-				"middleware:make <name>",
-				"repository:make <name>",
-				"request:make <name>",
-				"service:make <name>",
+				"action:make <name> [module]",
+				"command:make <name> [module]",
+				"config:make <name> [module]",
+				"controller:make <name> [module]",
+				"dto:make <name> [module]",
+				"env:make",
+				"job:make <name> [module]",
+				"listener:make <event> [module]",
+				"locale:make <locale> [module]",
+				"mail:make <name> [module]",
+				"middleware:make <name> [module]",
+				"module:make <name>",
+				"repository:make <name> [module]",
+				"request:make <name> [module]",
+				"route:make <name> [module]",
+				"service:make <name> [module]",
 			]),
 		);
 		expect(signatures.some((signature) => signature.startsWith("make:"))).toBe(
@@ -135,12 +151,12 @@ describe("middleware:make", () => {
 		expect(exitCode).toBe(0);
 
 		const output = logs.join("\n");
-		expect(output).toContain("Created app/middleware/auth-guard.ts");
+		expect(output).toContain("Created modules/app/middleware/auth-guard.ts");
 		expect(output).toContain('users.post("/", authGuardMiddleware(), handler)');
 		expect(output).toContain("app.use(authGuardMiddleware())");
 
 		const file = await readFile(
-			join(project, "app/middleware/auth-guard.ts"),
+			join(project, "modules/app/middleware/auth-guard.ts"),
 			"utf8",
 		);
 
@@ -182,7 +198,9 @@ describe("middleware:make", () => {
 		);
 
 		expect(exitCode).toBe(0);
-		expect(logs.join("\n")).toContain("Updated app/middleware/auth-guard.ts");
+		expect(logs.join("\n")).toContain(
+			"Updated modules/app/middleware/auth-guard.ts",
+		);
 	});
 
 	it("rejects invalid names", async () => {
@@ -200,7 +218,7 @@ describe("middleware:make", () => {
 });
 
 describe("listener:make", () => {
-	it("creates app/listeners/<event>.ts as one self-contained class", async () => {
+	it("creates modules/app/listeners/<event>.ts as one self-contained class", async () => {
 		const project = await createProject();
 		const { exitCode, logs } = runGenerator(
 			project,
@@ -212,7 +230,7 @@ describe("listener:make", () => {
 		expect(exitCode).toBe(0);
 
 		const output = logs.join("\n");
-		expect(output).toContain("Created app/listeners/user-activated.ts");
+		expect(output).toContain("Created modules/app/listeners/user-activated.ts");
 		expect(output).toContain(
 			"Replace Record<string, unknown> with the real payload shape (Listener.of<…> in the class header)",
 		);
@@ -221,7 +239,7 @@ describe("listener:make", () => {
 		);
 
 		const file = await readFile(
-			join(project, "app/listeners/user-activated.ts"),
+			join(project, "modules/app/listeners/user-activated.ts"),
 			"utf8",
 		);
 
@@ -238,8 +256,106 @@ describe("listener:make", () => {
 	});
 });
 
+describe("module:make", () => {
+	it("creates only the routes entry, which the framework auto-loads", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			MODULE_COMMAND,
+			"MakeModuleCommand",
+			{ name: "billing" },
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created modules/billing/routes/routes.ts");
+		expect(output).toContain("Auto-loaded at boot");
+
+		const routes = await readFile(
+			join(project, "modules/billing/routes/routes.ts"),
+			"utf8",
+		);
+		expect(routes).toContain('import type { App } from "@barq";');
+		expect(routes).toContain("export function billingRoutes(_app: App): void");
+
+		for (const path of [
+			"modules/billing/locales",
+			"modules/billing/jobs",
+			"modules/billing/listeners",
+			"modules/billing/commands",
+		]) {
+			expect(existsSync(join(project, path))).toBe(false);
+		}
+	});
+
+	it("camel-cases the route function for dashed names", async () => {
+		const project = await createProject();
+		runGenerator(project, MODULE_COMMAND, "MakeModuleCommand", {
+			name: "audit-log",
+		});
+
+		const routes = await readFile(
+			join(project, "modules/audit-log/routes/routes.ts"),
+			"utf8",
+		);
+
+		expect(routes).toContain("export function auditLogRoutes");
+	});
+
+	it("refuses to overwrite an existing module without --force", async () => {
+		const project = await createProject();
+		runGenerator(project, MODULE_COMMAND, "MakeModuleCommand", {
+			name: "billing",
+		});
+		const { exitCode, logs } = runGenerator(
+			project,
+			MODULE_COMMAND,
+			"MakeModuleCommand",
+			{ name: "billing" },
+		);
+
+		expect(exitCode).toBe(1);
+		expect(logs.join("\n")).toContain(
+			"modules/billing already exists — use --force",
+		);
+	});
+
+	it("overwrites the scaffold with --force", async () => {
+		const project = await createProject();
+		runGenerator(project, MODULE_COMMAND, "MakeModuleCommand", {
+			name: "billing",
+		});
+		const { exitCode, logs } = runGenerator(
+			project,
+			MODULE_COMMAND,
+			"MakeModuleCommand",
+			{ name: "billing" },
+			true,
+		);
+
+		expect(exitCode).toBe(0);
+		expect(logs.join("\n")).toContain(
+			"Updated modules/billing/routes/routes.ts",
+		);
+	});
+
+	it("rejects names that are not a single folder", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			MODULE_COMMAND,
+			"MakeModuleCommand",
+			{ name: "billing/v1" },
+		);
+
+		expect(exitCode).toBe(1);
+		expect(logs.join("\n")).toContain('Invalid module name "billing/v1"');
+	});
+});
+
 describe("action:make", () => {
-	it("creates app/actions/<name>.ts with a handle()", async () => {
+	it("creates modules/app/actions/<name>.ts with a handle()", async () => {
 		const project = await createProject();
 		const { exitCode, logs } = runGenerator(
 			project,
@@ -251,12 +367,14 @@ describe("action:make", () => {
 		expect(exitCode).toBe(0);
 
 		const output = logs.join("\n");
-		expect(output).toContain("Created app/actions/generate-otp.ts");
+		expect(output).toContain("Created modules/app/actions/generate-otp.ts");
 		expect(output).toContain("call `handle()`");
-		expect(output).toContain("Return a DTO from app/dtos (`dto:make`)");
+		expect(output).toContain(
+			"Return a DTO from modules/app/dtos (`dto:make <name>`)",
+		);
 
 		const file = await readFile(
-			join(project, "app/actions/generate-otp.ts"),
+			join(project, "modules/app/actions/generate-otp.ts"),
 			"utf8",
 		);
 
@@ -276,11 +394,11 @@ describe("action:make", () => {
 
 		expect(exitCode).toBe(0);
 		expect(logs.join("\n")).toContain(
-			"Created app/actions/billing/send-invoice.ts",
+			"Created modules/app/actions/billing/send-invoice.ts",
 		);
 
 		const file = await readFile(
-			join(project, "app/actions/billing/send-invoice.ts"),
+			join(project, "modules/app/actions/billing/send-invoice.ts"),
 			"utf8",
 		);
 
@@ -289,7 +407,7 @@ describe("action:make", () => {
 });
 
 describe("dto:make", () => {
-	it("creates app/dtos/<name>.ts exporting the DTO interface", async () => {
+	it("creates modules/app/dtos/<name>.ts exporting the DTO interface", async () => {
 		const project = await createProject();
 		const { exitCode, logs } = runGenerator(
 			project,
@@ -301,14 +419,424 @@ describe("dto:make", () => {
 		expect(exitCode).toBe(0);
 
 		const output = logs.join("\n");
-		expect(output).toContain("Created app/dtos/otp.ts");
+		expect(output).toContain("Created modules/app/dtos/otp.ts");
 		expect(output).toContain("never the raw entity");
 
-		const file = await readFile(join(project, "app/dtos/otp.ts"), "utf8");
+		const file = await readFile(
+			join(project, "modules/app/dtos/otp.ts"),
+			"utf8",
+		);
 
 		expect(file).toContain("export interface OtpDto {");
 		expect(file).toContain("TODO: list the fields");
 		expect(file).toContain("id: string;");
+	});
+});
+
+describe("mail:make", () => {
+	it("creates a class-based mail in modules/app/mail", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			MAIL_COMMAND,
+			"MakeMailCommand",
+			{ name: "welcome" },
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created modules/app/mail/welcome.ts");
+		expect(output).toContain(
+			"Inject WelcomeMail anywhere and call `send(to, data)`",
+		);
+
+		const file = await readFile(
+			join(project, "modules/app/mail/welcome.ts"),
+			"utf8",
+		);
+
+		expect(file).toContain("export type WelcomeMailData = {");
+		expect(file).toContain("export class WelcomeMail {");
+		expect(file).toContain("readonly template: MailTemplate = {");
+		expect(file).toContain("async send(");
+		expect(file).toContain(
+			"return mailer().send({ to, template: this.template, data });",
+		);
+	});
+
+	it("targets a named module", async () => {
+		const project = await createProject();
+		runGenerator(project, MAIL_COMMAND, "MakeMailCommand", {
+			name: "invoice-created",
+			module: "billing",
+		});
+
+		expect(
+			existsSync(join(project, "modules/billing/mail/invoice-created.ts")),
+		).toBe(true);
+	});
+});
+
+describe("locale:make", () => {
+	it("creates a locale dictionary in modules/app/locales", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			LOCALE_COMMAND,
+			"MakeLocaleCommand",
+			{ locale: "en" },
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created modules/app/locales/en.ts");
+		expect(output).toContain("The file name is the locale key: `en`");
+
+		const file = await readFile(
+			join(project, "modules/app/locales/en.ts"),
+			"utf8",
+		);
+
+		expect(file).toContain("export default {");
+		expect(file).toContain("`en` dictionary of the `app` module");
+	});
+
+	it("accepts region codes and targets a named module", async () => {
+		const project = await createProject();
+		const { exitCode } = runGenerator(
+			project,
+			LOCALE_COMMAND,
+			"MakeLocaleCommand",
+			{ locale: "pt-br", module: "billing" },
+		);
+
+		expect(exitCode).toBe(0);
+		expect(existsSync(join(project, "modules/billing/locales/pt-br.ts"))).toBe(
+			true,
+		);
+	});
+
+	it("rejects locales that are not a short language code", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			LOCALE_COMMAND,
+			"MakeLocaleCommand",
+			{ locale: "english!" },
+		);
+
+		expect(exitCode).toBe(1);
+		expect(logs.join("\n")).toContain('Invalid name "english!"');
+	});
+});
+
+describe("route:make", () => {
+	it("creates a route group in modules/app/routes", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			ROUTE_COMMAND,
+			"MakeRouteCommand",
+			{ name: "v1" },
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created modules/app/routes/v1.ts");
+		expect(output).toContain(
+			"Import and call `appV1Routes(app)` in modules/app/routes/routes.ts",
+		);
+
+		const file = await readFile(
+			join(project, "modules/app/routes/v1.ts"),
+			"utf8",
+		);
+
+		expect(file).toContain('import type { App } from "@barq";');
+		expect(file).toContain("export function appV1Routes(app: App): void {");
+		expect(file).toContain('app.group("/v1"');
+	});
+
+	it("camel-cases the function for nested names and a module", async () => {
+		const project = await createProject();
+		runGenerator(project, ROUTE_COMMAND, "MakeRouteCommand", {
+			name: "admin/users",
+			module: "billing",
+		});
+
+		const file = await readFile(
+			join(project, "modules/billing/routes/admin/users.ts"),
+			"utf8",
+		);
+
+		expect(file).toContain(
+			"export function billingAdminUsersRoutes(app: App): void {",
+		);
+		expect(file).toContain('app.group("/admin/users"');
+	});
+
+	it("refuses to shadow the auto-loaded routes entry", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			ROUTE_COMMAND,
+			"MakeRouteCommand",
+			{ name: "routes" },
+		);
+
+		expect(exitCode).toBe(1);
+		expect(logs.join("\n")).toContain(
+			'"routes" is the module entry point — use `module:make` to scaffold it.',
+		);
+		expect(existsSync(join(project, "modules/app/routes/routes.ts"))).toBe(
+			false,
+		);
+	});
+});
+
+describe("config:make", () => {
+	it("creates a typed config object in modules/app/config", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			CONFIG_COMMAND,
+			"MakeConfigCommand",
+			{ name: "mail" },
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created modules/app/config/mail.ts");
+		expect(output).toContain("Import it with `@modules/app/config/mail`");
+
+		const file = await readFile(
+			join(project, "modules/app/config/mail.ts"),
+			"utf8",
+		);
+
+		expect(file).toContain("export const MailConfig = {");
+		expect(file).toContain("`mail` configuration of the `app` module");
+	});
+
+	it("targets a named module", async () => {
+		const project = await createProject();
+		runGenerator(project, CONFIG_COMMAND, "MakeConfigCommand", {
+			name: "storage",
+			module: "billing",
+		});
+
+		expect(existsSync(join(project, "modules/billing/config/storage.ts"))).toBe(
+			true,
+		);
+	});
+});
+
+describe("env:make", () => {
+	it("creates .env and .env.example at the project root", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			ENV_COMMAND,
+			"MakeEnvCommand",
+			{},
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created .env");
+		expect(output).toContain("Created .env.example");
+		expect(output).toContain("A fresh APP_KEY was generated in .env");
+
+		const env = await readFile(join(project, ".env"), "utf8");
+		const example = await readFile(join(project, ".env.example"), "utf8");
+
+		expect(env).toContain("APP_ENV=development");
+		expect(env).toMatch(/APP_KEY="base64:[A-Za-z0-9+/=]+"/);
+		expect(env).not.toContain("REPLACE_ME");
+		expect(example).toContain(
+			'APP_KEY="base64:REPLACE_ME_WITH_THE_GENERATED_KEY="',
+		);
+		expect(example).toContain("APP_PORT=3000");
+	});
+
+	it("creates the missing file without touching the existing one", async () => {
+		const project = await createProject();
+		await Bun.write(join(project, ".env"), 'APP_KEY="keep-me"\n');
+
+		const { exitCode, logs } = runGenerator(
+			project,
+			ENV_COMMAND,
+			"MakeEnvCommand",
+			{},
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain(
+			"Skipped .env — already exists (use --force to overwrite)",
+		);
+		expect(output).toContain("Created .env.example");
+		expect(output).not.toContain("fresh APP_KEY");
+		expect(await readFile(join(project, ".env"), "utf8")).toBe(
+			'APP_KEY="keep-me"\n',
+		);
+	});
+
+	it("refuses to overwrite the existing pair without --force", async () => {
+		const project = await createProject();
+		await Bun.write(join(project, ".env"), 'APP_KEY="keep-me"\n');
+		await Bun.write(join(project, ".env.example"), "APP_KEY=example\n");
+
+		const { exitCode, logs } = runGenerator(
+			project,
+			ENV_COMMAND,
+			"MakeEnvCommand",
+			{},
+		);
+
+		expect(exitCode).toBe(1);
+		expect(logs.join("\n")).toContain(
+			"Both .env and .env.example already exist — use --force to overwrite.",
+		);
+		expect(await readFile(join(project, ".env"), "utf8")).toBe(
+			'APP_KEY="keep-me"\n',
+		);
+	});
+
+	it("overwrites with --force", async () => {
+		const project = await createProject();
+		await Bun.write(join(project, ".env"), 'APP_KEY="keep-me"\n');
+		await Bun.write(join(project, ".env.example"), "APP_KEY=example\n");
+
+		const { exitCode, logs } = runGenerator(
+			project,
+			ENV_COMMAND,
+			"MakeEnvCommand",
+			{},
+			true,
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Updated .env");
+		expect(output).toContain("Updated .env.example");
+		expect(await readFile(join(project, ".env"), "utf8")).not.toContain(
+			"keep-me",
+		);
+	});
+});
+
+describe("module targeting", () => {
+	it("creates actions under modules/<name> when a module is given", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			ACTION_COMMAND,
+			"MakeActionCommand",
+			{ name: "generate-otp", module: "billing" },
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created modules/billing/actions/generate-otp.ts");
+		expect(output).toContain("Return a DTO from modules/billing/dtos");
+
+		const file = await readFile(
+			join(project, "modules/billing/actions/generate-otp.ts"),
+			"utf8",
+		);
+
+		expect(file).toContain("export class GenerateOtpAction {");
+	});
+
+	it("defaults to the app module", async () => {
+		const project = await createProject();
+		const { logs } = runGenerator(
+			project,
+			ACTION_COMMAND,
+			"MakeActionCommand",
+			{ name: "generate-otp" },
+		);
+
+		expect(logs.join("\n")).toContain(
+			"Created modules/app/actions/generate-otp.ts",
+		);
+		expect(
+			existsSync(join(project, "modules/app/actions/generate-otp.ts")),
+		).toBe(true);
+	});
+
+	it("drops the version folder for module controllers and requests", async () => {
+		const project = await createProject();
+		runGenerator(project, CONTROLLER_COMMAND, "MakeControllerCommand", {
+			name: "user",
+			module: "user",
+		});
+		runGenerator(project, REQUEST_COMMAND, "MakeRequestCommand", {
+			name: "user/create",
+			module: "user",
+		});
+
+		expect(existsSync(join(project, "modules/user/controllers/user.ts"))).toBe(
+			true,
+		);
+		expect(
+			existsSync(join(project, "modules/user/requests/create-user.ts")),
+		).toBe(true);
+		expect(existsSync(join(project, "modules/user/controllers/v1"))).toBe(
+			false,
+		);
+		expect(existsSync(join(project, "modules/user/requests/v1"))).toBe(false);
+	});
+
+	it("does not wire module jobs into the flat app config", async () => {
+		const project = await createProject();
+		const config = `import { defineConfigAsync } from "@barqel/barq-app";
+
+export default await defineConfigAsync({
+	name: "Test",
+	jobs: [],
+});
+`;
+		await Bun.write(join(project, "barq.config.ts"), config);
+
+		const { exitCode, logs } = runGenerator(
+			project,
+			JOB_COMMAND,
+			"MakeJobCommand",
+			{ name: "send-report", module: "billing" },
+		);
+
+		expect(exitCode).toBe(0);
+
+		const output = logs.join("\n");
+		expect(output).toContain("Created modules/billing/jobs/send-report.ts");
+		expect(output).toContain("Auto-discovered from modules/billing");
+
+		expect(await readFile(join(project, "barq.config.ts"), "utf8")).toBe(
+			config,
+		);
+	});
+
+	it("rejects invalid module names", async () => {
+		const project = await createProject();
+		const { exitCode, logs } = runGenerator(
+			project,
+			ACTION_COMMAND,
+			"MakeActionCommand",
+			{ name: "generate-otp", module: "Billing/Admin" },
+		);
+
+		expect(exitCode).toBe(1);
+		expect(logs.join("\n")).toContain('Invalid module "Billing/Admin"');
 	});
 });
 

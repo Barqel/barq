@@ -1,9 +1,10 @@
-import { GeneratorCommand, pascalCase } from "../generator";
+import { GeneratorCommand, moduleRoot, pascalCase } from "../generator";
 
 export class MakeServiceCommand extends GeneratorCommand {
-	readonly signature = "service:make <name>";
+	readonly signature = "service:make <name> [module]";
 
-	override readonly description = "Create a service in app/services";
+	override readonly description =
+		"Create a service in modules/<module>/services";
 
 	protected readonly stub = "service.stub";
 
@@ -11,8 +12,8 @@ export class MakeServiceCommand extends GeneratorCommand {
 		return `${pascalCase(name)}Service`;
 	}
 
-	protected outputPath(name: string): string {
-		return `app/services/${name}.ts`;
+	protected outputPath(name: string, module: string): string {
+		return `${moduleRoot(module)}/services/${name}.ts`;
 	}
 
 	protected override hints(): string[] {

@@ -1,12 +1,18 @@
+import type { App } from "@barqel/barq";
 import type { CommandClass } from "../console/command";
 import type { ListenerClass } from "../events/listener";
 import type { JobClass } from "../jobs/job";
+
+/** A module's route entry: mounts that module's HTTP routes on the app. */
+export type RouteEntry = (app: App) => void;
 
 export type AutoRegisterKind =
 	| "jobs"
 	| "listeners"
 	| "commands"
-	| "translations";
+	| "translations"
+	| "routes"
+	| "modules";
 
 export interface RegistryConfig<T> {
 	/** Directory path relative to project root (default: app/jobs, app/listeners, etc.) */
@@ -33,9 +39,15 @@ export interface AutoRegisterConfig {
 	commands?: boolean;
 	/** Discover and register translations from `app/locales` (default: false). */
 	translations?: boolean;
-	/** Directory overrides relative to PROJECT_ROOT (default: app/jobs, app/listeners, app/commands, app/locales). */
+	/**
+	 * Discover every module under `modules/` (default: true). Each module owns
+	 * its `routes/routes.ts`, `jobs/`, `listeners/`, `commands/` and `locales/`.
+	 * Set to `false` to opt out.
+	 */
+	modules?: boolean;
+	/** Directory overrides relative to PROJECT_ROOT (default: app/jobs, app/listeners, app/commands, app/locales, modules). */
 	directories?: Partial<
-		Record<"jobs" | "listeners" | "commands" | "locales", string>
+		Record<"jobs" | "listeners" | "commands" | "locales" | "modules", string>
 	>;
 	/** Maximum recursive scan depth (default: 5). */
 	maxDepth?: number;
@@ -67,5 +79,7 @@ export interface AutoRegisterResult {
 	listeners: ListenerClass[];
 	commands: CommandClass[];
 	translations: Record<string, Record<string, unknown>>;
+	/** Discovered route entries (module convention). */
+	routes?: RouteEntry[];
 	warnings: AutoRegisterWarning[];
 }

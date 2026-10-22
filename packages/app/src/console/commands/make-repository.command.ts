@@ -1,9 +1,10 @@
-import { GeneratorCommand, pascalCase } from "../generator";
+import { GeneratorCommand, moduleRoot, pascalCase } from "../generator";
 
 export class MakeRepositoryCommand extends GeneratorCommand {
-	readonly signature = "repository:make <name>";
+	readonly signature = "repository:make <name> [module]";
 
-	override readonly description = "Create a repository in app/repositories";
+	override readonly description =
+		"Create a repository in modules/<module>/repositories";
 
 	protected readonly stub = "repository.stub";
 
@@ -11,8 +12,8 @@ export class MakeRepositoryCommand extends GeneratorCommand {
 		return `${pascalCase(name)}Repository`;
 	}
 
-	protected outputPath(name: string): string {
-		return `app/repositories/${name}.ts`;
+	protected outputPath(name: string, module: string): string {
+		return `${moduleRoot(module)}/repositories/${name}.ts`;
 	}
 
 	protected override hints(): string[] {

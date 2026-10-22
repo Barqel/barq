@@ -1,5 +1,5 @@
 import { json, singleton, type Context } from "{{package}}";
-// import { XService } from "@/services/x";
+// import { XService } from "@/modules/{{module}}/services/x";
 
 @singleton()
 export class {{className}} {

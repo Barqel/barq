@@ -1,5 +1,5 @@
 import { injectable } from "{{package}}";
-// import { XRepository } from "@/repositories/x";
+// import { XRepository } from "@/modules/{{module}}/repositories/x";
 
 @injectable()
 export class {{className}} {

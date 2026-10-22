@@ -1,0 +1,11 @@
+// Route group owned by the `{{module}}` module.
+//
+// `routes/routes.ts` is the only entry auto-loaded at boot, so import this
+// function there and mount it.
+import type { App } from "{{package}}";
+
+export function {{camelName}}Routes(app: App): void {
+	app.group("/{{name}}", (group) => {
+		// group.get("/", () => ({ ok: true }));
+	});
+}

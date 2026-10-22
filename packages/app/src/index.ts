@@ -22,14 +22,18 @@ export type {
 	AutoRegisterResult,
 	AutoRegisterWarning,
 	AutoRegisterWarningCode,
+	DiscoverModulesOptions,
 	DiscoverOptions,
+	RouteEntry,
 } from "./auto-register";
 export {
 	defineConfigAsync,
 	discover,
+	discoverModules,
 	extractCommand,
 	extractJob,
 	extractListener,
+	extractRoute,
 	extractTranslation,
 	importFile,
 	mergeManualAndAuto,

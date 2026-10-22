@@ -1,11 +1,16 @@
 import type { RegistryTarget } from "../generator";
-import { GeneratorCommand, kebabCase, pascalCase } from "../generator";
+import {
+	GeneratorCommand,
+	kebabCase,
+	moduleRoot,
+	pascalCase,
+} from "../generator";
 
 export class MakeCommandCommand extends GeneratorCommand {
-	readonly signature = "command:make <name>";
+	readonly signature = "command:make <name> [module]";
 
 	override readonly description =
-		"Create a console command in app/commands (namespaces allowed, e.g. cache:clear)";
+		"Create a console command in modules/<module>/commands (namespaces allowed, e.g. cache:clear)";
 
 	protected readonly stub = "command.stub";
 
@@ -18,8 +23,8 @@ export class MakeCommandCommand extends GeneratorCommand {
 		return `${pascalCase(name)}Command`;
 	}
 
-	protected outputPath(name: string): string {
-		return `app/commands/${kebabCase(name)}.ts`;
+	protected outputPath(name: string, module: string): string {
+		return `${moduleRoot(module)}/commands/${kebabCase(name)}.ts`;
 	}
 
 	protected override variables(name: string): Record<string, string> {

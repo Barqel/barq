@@ -1,10 +1,16 @@
 import { appConfigFileLabel } from "../../config/app-config-file";
-import { camelCase, GeneratorCommand, kebabCase } from "../generator";
+import {
+	camelCase,
+	GeneratorCommand,
+	kebabCase,
+	moduleRoot,
+} from "../generator";
 
 export class MakeMiddlewareCommand extends GeneratorCommand {
-	readonly signature = "middleware:make <name>";
+	readonly signature = "middleware:make <name> [module]";
 
-	override readonly description = "Create a middleware in app/middleware";
+	override readonly description =
+		"Create a middleware in modules/<module>/middleware";
 
 	protected readonly stub = "middleware.stub";
 
@@ -12,8 +18,8 @@ export class MakeMiddlewareCommand extends GeneratorCommand {
 		return `${camelCase(name)}Middleware`;
 	}
 
-	protected outputPath(name: string): string {
-		return `app/middleware/${kebabCase(name)}.ts`;
+	protected outputPath(name: string, module: string): string {
+		return `${moduleRoot(module)}/middleware/${kebabCase(name)}.ts`;
 	}
 
 	protected override hints(

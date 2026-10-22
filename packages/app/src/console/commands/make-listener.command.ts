@@ -1,11 +1,16 @@
 import type { RegistryTarget } from "../generator";
-import { GeneratorCommand, kebabCase, pascalCase } from "../generator";
+import {
+	GeneratorCommand,
+	kebabCase,
+	moduleRoot,
+	pascalCase,
+} from "../generator";
 
 export class MakeListenerCommand extends GeneratorCommand {
-	readonly signature = "listener:make <event>";
+	readonly signature = "listener:make <event> [module]";
 
 	override readonly description =
-		"Create an event listener in app/listeners (event as user.created)";
+		"Create an event listener in modules/<module>/listeners (event as user.created)";
 
 	protected readonly stub = "listener.stub";
 
@@ -21,8 +26,8 @@ export class MakeListenerCommand extends GeneratorCommand {
 		return `${pascalCase(kebabCase(eventName))}Listener`;
 	}
 
-	protected outputPath(eventName: string): string {
-		return `app/listeners/${kebabCase(eventName)}.ts`;
+	protected outputPath(eventName: string, module: string): string {
+		return `${moduleRoot(module)}/listeners/${kebabCase(eventName)}.ts`;
 	}
 
 	protected override variables(eventName: string): Record<string, string> {

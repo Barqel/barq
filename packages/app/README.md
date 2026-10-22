@@ -14,6 +14,12 @@ static), DI (tsyringe) and validation (zod).
 bun add @barqel/barq-app
 ```
 
+The `barq` CLI runs on both Bun and Node.js. On Node.js (20.6 or newer) it
+uses the bundled `bin/node-loader.js` to resolve `tsconfig.json` `paths` and
+transpile app TypeScript (including decorators), so keep `typescript`
+installed. The cross-runtime entrypoint is `bin/barq.js`; `bin/barq.ts`
+remains for Bun.
+
 ## Import it as `@barq`
 
 Applications import the framework through the short `@barq` alias. Map it
@@ -150,6 +156,14 @@ await mailer().send({
 });
 ```
 
+Mails live with the module that owns them. Scaffold one with a template and
+a `send(to, data)` helper:
+
+```sh
+bun run cli mail:make welcome           # modules/app/mail/welcome.ts
+bun run cli mail:make welcome user      # modules/user/mail/welcome.ts
+```
+
 The transport is picked automatically: a configured `MAIL_HOST` means real
 SMTP delivery, no host means the message is printed in the terminal instead
 of being sent — so a development environment never needs a mail server.
@@ -196,10 +210,12 @@ A failed delivery is retried with a growing delay and then throws a
 ## Conventions
 
 - **Config** lives in `app/config/app.ts` (a root `barq.config.*` still
-  works); the `barq` CLI loads it with `loadAppConfig()`.
-- **Registries** are explicit arrays (`jobs`, `listeners`, `commands`) so the
-  production bundle stays self-contained — `*:make` generators append to
-  them automatically.
+  works, and the package entrypoint from `module`/`main` is the last
+  fallback); the `barq` CLI loads it with `loadAppConfig()`. Entrypoints used
+  this way must guard side effects with `import.meta.main`.
+- **Registries** are discovered from `modules/<name>/` by `defineConfigAsync`
+  (routes, jobs, listeners, commands, locales), so modules are self-contained
+  and `index.ts` stays free of per-module wiring.
 - **Events** live in their listener — one class carries the event name, the
   payload shape and the handler (`listener:make` scaffolds it); producers
   emit through the class's `event`:
@@ -219,19 +235,93 @@ A failed delivery is retried with a growing delay and then throws a
 
 - **Env**: the framework validates its own variables (`APP_*`, `LOG_LEVEL`,
   `RATE_LIMIT_*`, `IDEMPOTENCY_*`); validate extra ones with `createEnv` +
-  `envRules`.
+  `envRules`. `env:make` scaffolds the `.env` / `.env.example` pair at the
+  project root.
 
 ## Auto-Register System
 
-Barq supports automatic component discovery for `jobs`, `listeners`, `commands`, and `translations` via top-level await and `defineConfigAsync`.
+Barq discovers application components automatically via top-level await and
+`defineConfigAsync`.
 
-### Usage
+### Modules (default)
 
-In `app/config/app.ts`:
+Domain code lives in `modules/<name>/`, and `defineConfigAsync` scans that
+directory by default. Every module owns its registries through a fixed layout:
+
+```
+modules/user/
+  routes/routes.ts     # exactly one route function (or routes.ts)
+  routes/<group>.ts    # route groups imported by routes.ts
+  jobs/                # Job subclasses
+  listeners/           # Listener subclasses
+  commands/            # Command subclasses
+  locales/<locale>.ts  # dictionaries, deep-merged per locale
+  config/              # module-specific settings
+```
 
 ```ts
-import { defineConfigAsync } from "@barq";
+export default await defineConfigAsync({ name: "My App" });
+```
 
+Adding a module folder is enough: its routes are mounted, and its jobs,
+listeners, commands and translations are registered. Locale dictionaries from
+every module are deep-merged per language (a later module wins on collisions).
+Scaffold a module's route entry with:
+
+```sh
+bun run cli module:make billing
+```
+
+The remaining folders (`jobs/`, `listeners/`, `commands/`, `locales/`,
+`config/`) are optional — create them when the module needs them.
+
+Every component generator (`action:make`, `command:make`, `config:make`,
+`controller:make`, `dto:make`, `job:make`, `listener:make`, `locale:make`,
+`mail:make`, `middleware:make`, `repository:make`, `request:make`,
+`route:make`, `service:make`) accepts an optional trailing module. It
+defaults to `app`, so the plain command targets `modules/app/`:
+
+```sh
+bun run cli action:make send-otp            # modules/app/actions/send-otp.ts
+bun run cli action:make send-otp billing    # modules/billing/actions/send-otp.ts
+bun run cli job:make send-report billing    # modules/billing/jobs/send-report.ts
+bun run cli mail:make welcome               # modules/app/mail/welcome.ts
+bun run cli locale:make en                  # modules/app/locales/en.ts
+bun run cli route:make v1 user              # modules/user/routes/v1.ts
+bun run cli config:make mail user           # modules/user/config/mail.ts
+```
+
+`locale:make` uses the locale code as the file name and therefore as the
+dictionary key, and accepts regional codes such as `pt-br`. `route:make`
+creates a route group to import from the module's `routes/routes.ts` (the only
+route file loaded at boot), and `config:make` writes a module-specific
+settings object. Both accept nested names such as `admin/users`.
+
+`env:make` creates the `.env` and `.env.example` pair at the project root.
+The framework variables are included with usable defaults, `.env` gets a
+fresh `APP_KEY`, and `.env.example` keeps a placeholder key that is safe to
+commit:
+
+```sh
+bun run cli env:make
+```
+
+Existing files are never overwritten unless you pass `--force`; if only one
+of the pair is missing, `env:make` creates just that file. Application-specific
+variables still use `createEnv` + `envRules` in `modules/shared/config/`.
+
+Jobs, listeners and commands under `modules/<name>/` are auto-discovered, so
+the generator does not add them to the flat `jobs` / `listeners` / `commands`
+arrays in the app config.
+
+Set `autoRegister: { modules: false }` to opt out, or use
+`autoRegister.directories.modules` to scan another folder.
+
+### Flat directories (opt-in)
+
+The original per-registry directories remain available:
+
+```ts
 export default await defineConfigAsync({
 	name: "My App",
 	autoRegister: {

@@ -2,7 +2,7 @@ import { basename, extname } from "node:path";
 import { Command, type CommandClass } from "../console/command";
 import { Listener, type ListenerClass } from "../events/listener";
 import { Job, type JobClass } from "../jobs/job";
-import type { AutoRegisterWarning } from "./types";
+import type { AutoRegisterWarning, RouteEntry } from "./types";
 
 export interface ExtractItemResult<T> {
 	ok: boolean;
@@ -168,6 +168,59 @@ export function extractCommand(
 	};
 
 	return pickClassCandidate(mod, filePath, "commands", isCommandSubclass);
+}
+
+/**
+ * Picks the single route function a module's `routes.ts` exports.
+ *
+ * A route entry is either the default export or exactly one named function
+ * export; ambiguous files are reported instead of guessed.
+ */
+export function extractRoute(
+	mod: Record<string, unknown>,
+	filePath: string,
+): ExtractItemResult<RouteEntry> {
+	const candidates: { name: string; value: RouteEntry }[] = [];
+
+	if (typeof mod.default === "function") {
+		candidates.push({ name: "default", value: mod.default as RouteEntry });
+	}
+
+	for (const [key, val] of Object.entries(mod)) {
+		if (key === "default") continue;
+		if (typeof val !== "function") continue;
+		if (!candidates.some((candidate) => candidate.value === val)) {
+			candidates.push({ name: key, value: val as RouteEntry });
+		}
+	}
+
+	if (candidates.length === 0) {
+		return {
+			ok: false,
+			warning: {
+				code: "INVALID_EXPORT",
+				kind: "routes",
+				file: filePath,
+				message: "File does not export a route function.",
+			},
+		};
+	}
+
+	if (candidates.length > 1) {
+		return {
+			ok: false,
+			warning: {
+				code: "MULTIPLE_EXPORTS",
+				kind: "routes",
+				file: filePath,
+				message: `File exports multiple route functions (${candidates
+					.map((candidate) => candidate.name)
+					.join(", ")}). Expected exactly one.`,
+			},
+		};
+	}
+
+	return { ok: true, value: candidates[0]!.value };
 }
 
 export function extractTranslation(

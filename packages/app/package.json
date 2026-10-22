@@ -12,7 +12,7 @@
 		}
 	},
 	"bin": {
-		"barq": "./bin/barq.ts"
+		"barq": "./bin/barq.js"
 	},
 	"publishConfig": {
 		"access": "public"

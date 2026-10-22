@@ -1,0 +1,8 @@
+import type { App } from "{{package}}";
+
+export function {{camelName}}Routes(_app: App): void {
+	// Mount endpoints here, for example:
+	// _app.group("/{{name}}", (route) => {
+	// 	route.get("/", () => ({ module: "{{name}}" }));
+	// });
+}

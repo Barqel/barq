@@ -1,11 +1,11 @@
 import { injectable } from "{{package}}";
-// import type { XDto } from "@/dtos/x";
+// import type { XDto } from "@/modules/{{module}}/dtos/x";
 
 @injectable()
 export class {{className}} {
 	// constructor(private readonly repository: XRepository) {}
 
 	async handle(): Promise<void> {
-		// TODO: implement the use case and return a DTO from app/dtos
+		// TODO: implement the use case and return a DTO from modules/{{module}}/dtos
 	}
 }

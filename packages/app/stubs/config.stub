@@ -1,0 +1,7 @@
+// `{{name}}` configuration of the `{{module}}` module.
+//
+// Module-specific settings belong here; shared infrastructure settings live
+// in the shared module's config folder.
+export const {{className}} = {
+	// key: "value",
+};

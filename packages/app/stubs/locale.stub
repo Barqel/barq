@@ -1,0 +1,12 @@
+// `{{name}}` dictionary of the `{{module}}` module.
+//
+// Every module owns its locale files and the framework deep-merges them per
+// locale at boot, so keys from different modules compose. Keep the messages
+// grouped per domain:
+//
+//   users: {
+//   	notFound: "User not found",
+//   },
+export default {
+	// greeting: "Hello",
+};

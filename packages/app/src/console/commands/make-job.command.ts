@@ -1,9 +1,10 @@
-import { GeneratorCommand, pascalCase } from "../generator";
+import { GeneratorCommand, moduleRoot, pascalCase } from "../generator";
 
 export class MakeJobCommand extends GeneratorCommand {
-	readonly signature = "job:make <name>";
+	readonly signature = "job:make <name> [module]";
 
-	override readonly description = "Create a scheduled job in app/jobs";
+	override readonly description =
+		"Create a scheduled job in modules/<module>/jobs";
 
 	protected readonly stub = "job.stub";
 
@@ -13,8 +14,8 @@ export class MakeJobCommand extends GeneratorCommand {
 		return `${pascalCase(name)}Job`;
 	}
 
-	protected outputPath(name: string): string {
-		return `app/jobs/${name}.ts`;
+	protected outputPath(name: string, module: string): string {
+		return `${moduleRoot(module)}/jobs/${name}.ts`;
 	}
 
 	protected override hints(): string[] {

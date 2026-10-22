@@ -1,10 +1,15 @@
-import { GeneratorCommand, kebabCase, pascalCase } from "../generator";
+import {
+	GeneratorCommand,
+	kebabCase,
+	moduleRoot,
+	pascalCase,
+} from "../generator";
 
 export class MakeRequestCommand extends GeneratorCommand {
-	readonly signature = "request:make <name>";
+	readonly signature = "request:make <name> [module]";
 
 	override readonly description =
-		"Create a validated request in app/requests/v1 (resource/action, e.g. user/create)";
+		"Create a validated request in modules/<module>/requests (resource/action, e.g. user/create)";
 
 	protected readonly stub = "request.stub";
 
@@ -17,16 +22,14 @@ export class MakeRequestCommand extends GeneratorCommand {
 		return `${pascalCase(action)}${segments.map(pascalCase).join("")}Request`;
 	}
 
-	protected outputPath(name: string): string {
+	protected outputPath(name: string, module: string): string {
 		const segments = name.split("/");
 		const action = segments.pop()!;
 		const resource = segments.pop();
 
-		const directory = [
-			"app/requests/v1",
-			...segments,
-			...(resource ? [resource] : []),
-		].join("/");
+		// Modules are already scoped, so there is no version folder and the
+		// resource lives in the file name only.
+		const directory = [`${moduleRoot(module)}/requests`, ...segments].join("/");
 		const file = resource
 			? `${kebabCase(action)}-${kebabCase(resource)}.ts`
 			: `${kebabCase(action)}.ts`;

@@ -1,9 +1,10 @@
-import { GeneratorCommand, pascalCase } from "../generator";
+import { GeneratorCommand, moduleRoot, pascalCase } from "../generator";
 
 export class MakeControllerCommand extends GeneratorCommand {
-	readonly signature = "controller:make <name>";
+	readonly signature = "controller:make <name> [module]";
 
-	override readonly description = "Create a controller in app/controllers/v1";
+	override readonly description =
+		"Create a controller in modules/<module>/controllers";
 
 	protected readonly stub = "controller.stub";
 
@@ -11,11 +12,16 @@ export class MakeControllerCommand extends GeneratorCommand {
 		return `${pascalCase(name)}Controller`;
 	}
 
-	protected outputPath(name: string): string {
-		return `app/controllers/v1/${name}.ts`;
+	protected outputPath(name: string, module: string): string {
+		return `${moduleRoot(module)}/controllers/${name}.ts`;
 	}
 
-	protected override hints(): string[] {
-		return ["Register its routes in app/routes/v1/api.ts"];
+	protected override hints(
+		_name: string,
+		_className: string,
+		_relativePath: string,
+		module: string,
+	): string[] {
+		return [`Register its routes in modules/${module}/routes/routes.ts`];
 	}
 }

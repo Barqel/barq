@@ -1,7 +1,7 @@
 // Console support: `runCli()` (used by the `barq` bin) and the app-config
 // loader. Everything is class-based — built-in commands ship with the
 // framework, application commands come from the app config
-// (`app/config/app.ts` or a root `barq.config.*`).
+// (`app/config/app.ts`, a root `barq.config.*`, or the package entrypoint).
 import { pathToFileURL } from "node:url";
 import { createCli } from "@barqel/barq-cli";
 import { Mailer, setMailer } from "@barqel/barq-email";
@@ -26,7 +26,7 @@ export async function loadAppConfig(): Promise<BarqConfig> {
 	}
 
 	const module = await import(pathToFileURL(path).href);
-	return (module.default ?? {}) as BarqConfig;
+	return (module.default ?? module.config ?? {}) as BarqConfig;
 }
 
 /** Registers built-in + application commands and runs the CLI. */

@@ -1,3 +1,4 @@
+import type { App } from "@barqel/barq";
 import type { TranslationsRecord } from "@barqel/barq-i18n";
 import type { CommandClass } from "../console/command";
 import type { ListenerClass } from "../events/listener";
@@ -11,7 +12,8 @@ import {
 	extractTranslation,
 } from "./extractors";
 import { importFile } from "./importer";
-import { mergeManualAndAuto } from "./merge";
+import { deepMergeManualWins, mergeManualAndAuto } from "./merge";
+import { discoverModules } from "./modules";
 import { resolveDirectory } from "./resolver";
 import { scanFiles } from "./scanner";
 import type {
@@ -24,11 +26,14 @@ export {
 	extractCommand,
 	extractJob,
 	extractListener,
+	extractRoute,
 	extractTranslation,
 	sanitizeTranslations,
 } from "./extractors";
 export { importFile } from "./importer";
 export { mergeManualAndAuto } from "./merge";
+export type { DiscoverModulesOptions } from "./modules";
+export { discoverModules } from "./modules";
 export { resolveDirectory } from "./resolver";
 export { scanFiles } from "./scanner";
 export * from "./types";
@@ -177,8 +182,35 @@ export async function discover(
 		listeners,
 		commands,
 		translations,
+		routes: [],
 		warnings,
 	};
+}
+
+/** Deep-merges two locale records; `override` wins on key collisions. */
+function mergeTranslationRecords(
+	base: Record<string, Record<string, unknown>>,
+	override: Record<string, Record<string, unknown>>,
+): Record<string, Record<string, unknown>> {
+	const merged: Record<string, Record<string, unknown>> = {};
+
+	for (const locale of new Set([
+		...Object.keys(base),
+		...Object.keys(override),
+	])) {
+		const baseLocale = base[locale];
+		const overrideLocale = override[locale];
+
+		if (baseLocale && overrideLocale) {
+			merged[locale] = deepMergeManualWins(overrideLocale, baseLocale);
+		} else if (overrideLocale) {
+			merged[locale] = overrideLocale;
+		} else if (baseLocale) {
+			merged[locale] = baseLocale;
+		}
+	}
+
+	return merged;
 }
 
 /**
@@ -244,28 +276,13 @@ export async function defineConfigAsync<T extends BarqConfig>(
 		commandsObj?.autoRegister ?? globalAutoRegister.commands ?? false;
 	const translationsAuto =
 		translationsObj?.autoRegister ?? globalAutoRegister.translations ?? false;
-
-	const hasAnyAuto =
-		jobsAuto || listenersAuto || commandsAuto || translationsAuto;
+	const modulesAuto = globalAutoRegister.modules ?? true;
 
 	const hasRegistryObject =
 		jobsObj !== null ||
 		listenersObj !== null ||
 		commandsObj !== null ||
 		translationsObj !== null;
-
-	if (!hasAnyAuto) {
-		if (!hasRegistryObject) {
-			return config;
-		}
-		return {
-			...config,
-			jobs: manualJobs,
-			listeners: manualListeners,
-			commands: manualCommands,
-			translations: manualTranslations as TranslationsRecord,
-		};
-	}
 
 	const discoveryOptions: AutoRegisterConfig = {
 		...globalAutoRegister,
@@ -282,8 +299,49 @@ export async function defineConfigAsync<T extends BarqConfig>(
 		},
 	};
 
-	// Run discovery
-	const result = await discover(PROJECT_ROOT, discoveryOptions);
+	const emptyResult: AutoRegisterResult = {
+		jobs: [],
+		listeners: [],
+		commands: [],
+		translations: {},
+		routes: [],
+		warnings: [],
+	};
+
+	// Module discovery is on by default: `modules/<name>/` owns its
+	// registries. Flat `app/jobs`-style discovery stays opt-in.
+	const moduleResult = modulesAuto
+		? await discoverModules(PROJECT_ROOT, discoveryOptions)
+		: emptyResult;
+
+	const hasFlatAuto =
+		jobsAuto || listenersAuto || commandsAuto || translationsAuto;
+	const flatResult = hasFlatAuto
+		? await discover(PROJECT_ROOT, discoveryOptions)
+		: emptyResult;
+
+	const result: AutoRegisterResult = {
+		jobs: [...moduleResult.jobs, ...flatResult.jobs],
+		listeners: [...moduleResult.listeners, ...flatResult.listeners],
+		commands: [...moduleResult.commands, ...flatResult.commands],
+		translations: mergeTranslationRecords(
+			moduleResult.translations,
+			flatResult.translations,
+		),
+		routes: moduleResult.routes ?? [],
+		warnings: [...moduleResult.warnings, ...flatResult.warnings],
+	};
+
+	const hasDiscovered =
+		result.jobs.length > 0 ||
+		result.listeners.length > 0 ||
+		result.commands.length > 0 ||
+		(result.routes?.length ?? 0) > 0 ||
+		Object.keys(result.translations).length > 0;
+
+	if (!hasDiscovered && !hasRegistryObject) {
+		return config;
+	}
 
 	// Dispatch warnings
 	for (const warning of result.warnings) {
@@ -291,7 +349,7 @@ export async function defineConfigAsync<T extends BarqConfig>(
 			discoveryOptions.onWarning(warning);
 		} else {
 			console.warn(
-				`[barq:autoRegister] (${warning.code}) ${warning.kind}: ${warning.message}`,
+				`[barq:auto-register] (${warning.code}) ${warning.kind}: ${warning.message}`,
 			);
 		}
 	}
@@ -307,8 +365,20 @@ export async function defineConfigAsync<T extends BarqConfig>(
 		result,
 	);
 
+	const discoveredRoutes = result.routes ?? [];
+	const routes: BarqConfig["routes"] =
+		discoveredRoutes.length === 0
+			? config.routes
+			: (app: App) => {
+					for (const route of discoveredRoutes) {
+						route(app);
+					}
+					config.routes?.(app);
+				};
+
 	return {
 		...config,
+		routes,
 		jobs: merged.jobs,
 		listeners: merged.listeners,
 		commands: merged.commands,
